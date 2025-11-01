@@ -1,5 +1,7 @@
 # pisces
 
+[![.github/workflows/ci.yml](https://github.com/mjc-gh/pisces/actions/workflows/ci.yml/badge.svg)](https://github.com/mjc-gh/pisces/actions/workflows/ci.yml)
+
 A tool for analyzing phishing attack sites
 
 # Task Results
