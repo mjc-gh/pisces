@@ -51,6 +51,10 @@ type Result struct {
 }
 
 func (r *Result) JSON() ([]byte, error) {
+	return json.Marshal(r)
+}
+
+func (r *Result) PrettyJSON() ([]byte, error) {
 	return json.MarshalIndent(r, "", "\t")
 }
 
@@ -69,25 +73,29 @@ func performTask(ctx context.Context, task *Task, logger *zerolog.Logger) Result
 	case "analyze":
 		analysis, err := performAnalyzeTask(ctx, task, logger)
 		if err != nil {
-			return errorResult(task, err)
+			// Task failed
+			return Result{
+				task.action,
+				time.Since(task.received),
+				err,
+				task.url,
+				nil,
+			}
 		}
 
 		result.Elapsed = time.Since(task.received)
 		result.Result = &analysis
 
 	default:
-		return errorResult(task, fmt.Errorf("unknown action: %s", task.action))
+		// Unknown task -- shouldn't happen in practice
+		return Result{
+			task.action,
+			time.Since(task.received),
+			fmt.Errorf("unknown action: %s", task.action),
+			task.url,
+			nil,
+		}
 	}
 
 	return result
-}
-
-func errorResult(task *Task, err error) Result {
-	return Result{
-		task.action,
-		time.Since(task.received),
-		err,
-		task.url,
-		nil,
-	}
 }

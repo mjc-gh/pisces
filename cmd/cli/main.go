@@ -48,11 +48,7 @@ func main() {
 					}
 
 					e := engine.New(cmd.Int("concurrency"), opts...)
-
-					// Start our engine or return error
-					if err := e.Start(ctx); err != nil {
-						return err
-					}
+					e.Start(ctx)
 
 					for _, url := range urls {
 						t := engine.NewTask("analyze", url)
@@ -73,6 +69,7 @@ func main() {
 
 					defer out.Close()
 
+					// TODO write an arary for results as JSON
 					for r := range e.Results() {
 						if r.Error != nil {
 							logger.Warn().Msgf("result error: %v", r.Error)

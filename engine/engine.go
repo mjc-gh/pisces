@@ -15,11 +15,12 @@ type config struct {
 }
 
 type Engine struct {
-	config  config
-	logger  *zerolog.Logger
-	results chan Result
-	tasks   chan Task
-	wg      sync.WaitGroup
+	browserCancel context.CancelFunc
+	config        config
+	logger        *zerolog.Logger
+	results       chan Result
+	tasks         chan Task
+	wg            sync.WaitGroup
 }
 
 type Option func(*Engine)
@@ -56,15 +57,11 @@ func New(concurreny int, opts ...Option) *Engine {
 	return &e
 }
 
-func (e *Engine) Start(ctx context.Context) (err error) {
+func (e *Engine) Start(ctx context.Context) {
 	if e.config.remoteUrl != "" {
-		if ctx, err = browser.StartRemote(ctx, e.config.remoteUrl); err != nil {
-			return
-		}
+		ctx, e.browserCancel = browser.StartRemote(ctx, e.config.remoteUrl)
 	} else {
-		if ctx, err = browser.StartLocal(ctx); err != nil {
-			return
-		}
+		ctx, e.browserCancel = browser.StartLocal(ctx)
 	}
 
 	for i := 0; i < e.config.concurreny; i++ {
@@ -82,8 +79,6 @@ func (e *Engine) Start(ctx context.Context) (err error) {
 			}
 		}(i+1, e.tasks, e.results, e.wg.Done, e.logger)
 	}
-
-	return nil
 }
 
 // Blocks until workers goroutines have completed their tasks
@@ -91,9 +86,14 @@ func (e *Engine) Shutdown() {
 	e.logger.Debug().Msg("shutdown called")
 	defer e.logger.Debug().Msg("shutdown done")
 
+	if e.browserCancel != nil {
+		defer e.browserCancel()
+	}
+
 	close(e.tasks)
 	e.wg.Wait()
 	close(e.results)
+
 }
 
 // Get the Results channel
