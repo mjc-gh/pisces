@@ -35,7 +35,7 @@ func NewTask(action, input string) Task {
 }
 
 func (t *Task) SetDevice(deviceType, deviceSize string) {
-	t.winHeight, t.winWidth = browser.DimensionsFromDeviceProfile(deviceType, deviceSize)
+	t.winWidth, t.winHeight = browser.DimensionsFromDeviceProfile(deviceType, deviceSize)
 }
 
 func (t *Task) SetUserAgent(deviceType, userAgentAlias string) {
@@ -81,19 +81,29 @@ func performTask(ctx context.Context, task *Task, logger *zerolog.Logger) Result
 
 	switch task.action {
 	case "analyze":
-		analysis, err := performAnalyzeTask(ctx, task, logger)
+		payload, err := performAnalyzeTask(ctx, task, logger)
 		if err != nil {
 			// Task failed
 			return newErrorResult(task, err)
 		}
 
-		result.Elapsed = time.Since(task.received)
-		result.Result = &analysis
+		result.Result = &payload
+
+	case "collect":
+		payload, err := performCollectTask(ctx, task, logger)
+		if err != nil {
+			// Task failed
+			return newErrorResult(task, err)
+		}
+
+		result.Result = &payload
 
 	default:
 		// Unknown task -- shouldn't happen in practice
 		return newErrorResult(task, fmt.Errorf("unknown action: %s", task.action))
 	}
+
+	result.Elapsed = time.Since(task.received)
 
 	return result
 }

@@ -16,8 +16,8 @@ func main() {
 	cmd := &cli.Command{
 		Commands: []*cli.Command{
 			{
-				Name:  "analyze",
-				Usage: "Analyze one or more URLs",
+				Name:  "collect",
+				Usage: "Collect HTML and assets for one or more URLs",
 				Arguments: []cli.Argument{
 					&cli.StringArgs{Name: "url", Min: 0, Max: -1},
 				},
@@ -52,7 +52,7 @@ func main() {
 					e.Start(ctx)
 
 					for _, url := range urls {
-						t := engine.NewTask("analyze", url)
+						t := engine.NewTask("collect", url)
 						t.SetDevice(deviceType, deviceSize)
 						t.SetUserAgent(deviceType, cmd.StringArg("user-agent"))
 
@@ -68,10 +68,7 @@ func main() {
 						panic(err)
 					}
 
-					defer out.Close()
-
 					encoder := jsonutil.NewStreamEncoder(out, true)
-					defer encoder.Close()
 
 					for r := range e.Results() {
 						if r.Error != nil {
@@ -87,6 +84,14 @@ func main() {
 						}
 
 						logger.Info().Msgf("wrote to file %s", output)
+					}
+
+					if err = encoder.Close(); err != nil {
+						logger.Warn().Msgf("encoder close error: %v", err)
+					}
+
+					if err = out.Close(); err != nil {
+						logger.Warn().Msgf("file close error: %v", err)
 					}
 
 					logger.Info().Msg("done")
