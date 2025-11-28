@@ -19,6 +19,7 @@ import (
 )
 
 var logger *zerolog.Logger
+var version string
 
 type taskCallbackFn = func(*cli.Command, *engine.Engine) error
 
@@ -42,9 +43,14 @@ func main() {
 		&cli.StringFlag{Name: "output", Value: "pisces.ndjson", Aliases: []string{"o"}},
 	}, baseFlags...)
 
+	ver := version
+	if ver == "" {
+		ver = "0.0.0"
+	}
+
 	cmd := &cli.Command{
 		Name:    "pisces",
-		Version: "0.0.0",
+		Version: ver,
 		Usage:   "A tool for analyzing phishing sites",
 		Commands: []*cli.Command{
 			{

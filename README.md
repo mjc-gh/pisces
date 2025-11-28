@@ -1,6 +1,7 @@
 # pisces
 
 [![.github/workflows/ci.yml](https://github.com/mjc-gh/pisces/actions/workflows/ci.yml/badge.svg)](https://github.com/mjc-gh/pisces/actions/workflows/ci.yml)
+![GitHub Release](https://img.shields.io/github/v/release/mjc-gh/pisces)
 
 A tool for analyzing phishing attack sites
 

@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: "go.mod"
+
+      - name: Build CLI tool
+        run: make build.cli
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pisces-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: build/pisces*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts/ -type f
+
+      - name: Prepare for release
+        run: |
+          tar -czvf pisces-darwin-amd64.tar.gz artifacts/pisces-darwin-amd64/pisces
+          tar -czvf pisces-darwin-arm64.tar.gz artifacts/pisces-darwin-arm64/pisces
+          tar -czvf pisces-linux-amd64.tar.gz artifacts/pisces-linux-amd64/pisces
+          tar -czvf pisces-linux-arm64.tar.gz artifacts/pisces-linux-arm64/pisces
+          zip -r pisces-win-amd64.zip artifacts/pisces-windows-amd64/pisces
+          zip -r pisces-win-arm64.zip artifacts/pisces-windows-arm64/pisces
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            pisces-darwin-amd64.tar.gz
+            pisces-darwin-arm64.tar.gz
+            pisces-linux-amd64.tar.gz
+            pisces-linux-arm64.tar.gz
+            pisces-win-amd64.zip
+            pisces-win-arm64.zip

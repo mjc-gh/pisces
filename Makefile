@@ -5,7 +5,7 @@ go.tidy:
 	go mod tidy
 
 build.cli:
-	go build -o build/pisces cmd/cli/main.go
+	go build -o build/pisces -ldflags="-X main.version=$(shell git tag --sort=-v:refname)" cmd/cli/main.go
 
 check:
 	golangci-lint run
