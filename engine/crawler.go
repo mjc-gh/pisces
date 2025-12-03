@@ -37,7 +37,8 @@ type Asset struct {
 	ResourceType    string         `json:"resource_type"`
 	RequestHeaders  map[string]any `json:"request_headers"`
 	ResponseHeaders map[string]any `json:"response_headers"`
-	Body            string         `json:"body"`
+	InitiatorURL    string         `json:"initiator_url,omitempty"`
+	Body            string         `json:"body,omitempty"`
 }
 
 func NewCrawler(userAgent string, winWidth, winHeight int64) Crawler {
@@ -83,6 +84,7 @@ func (c *Crawler) Visit(ctx context.Context, url string, logger *zerolog.Logger)
 					URL:            ev.Request.URL,
 					ResourceType:   string(ev.Type),
 					RequestHeaders: ev.Request.Headers,
+					InitiatorURL:   ev.Initiator.URL,
 				}
 			}
 
