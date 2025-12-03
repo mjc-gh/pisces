@@ -18,6 +18,8 @@ func matchAsset(fileName string) func(*Asset) bool {
 }
 
 func TestCrawlerVisit(t *testing.T) {
+	t.Parallel()
+
 	ctx, _ := chromedp.NewContext(piscestest.NewTestContext())
 	server := piscestest.NewTestWebServer("simple")
 	crawler := NewCrawler("pisces", 1920, 1080)
@@ -51,6 +53,8 @@ func TestCrawlerVisit(t *testing.T) {
 }
 
 func TestCrawlerLastVisitWithoutAnyVisits(t *testing.T) {
+	t.Parallel()
+
 	crawler := NewCrawler("pisces", 1920, 1080)
 
 	assert.Nil(t, crawler.LastVisit())

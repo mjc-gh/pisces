@@ -7,6 +7,8 @@ import (
 )
 
 func TestIsValidDeviceType(t *testing.T) {
+	t.Parallel()
+
 	assert.True(t, IsValidDeviceType("desktop"))
 	assert.True(t, IsValidDeviceType("mobile"))
 	assert.False(t, IsValidDeviceType("tablet"))
@@ -15,6 +17,8 @@ func TestIsValidDeviceType(t *testing.T) {
 }
 
 func TestIsValidDeviceSize(t *testing.T) {
+	t.Parallel()
+
 	assert.True(t, IsValidDeviceSize("large"))
 	assert.True(t, IsValidDeviceSize("medium"))
 	assert.True(t, IsValidDeviceSize("small"))
@@ -24,6 +28,8 @@ func TestIsValidDeviceSize(t *testing.T) {
 }
 
 func TestDimensionsFromDeviceProfile(t *testing.T) {
+	t.Parallel()
+
 	h, w := DimensionsFromDeviceProfile("desktop", "large")
 	assert.Equal(t, 1920, h)
 	assert.Equal(t, 1080, w)
@@ -70,6 +76,8 @@ func TestDimensionsFromDeviceProfile(t *testing.T) {
 }
 
 func TestUserAgent(t *testing.T) {
+	t.Parallel()
+
 	ua := UserAgent("desktop", "chrome")
 	assert.Equal(t, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36", ua)
 

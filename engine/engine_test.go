@@ -8,6 +8,8 @@ import (
 )
 
 func TestWithRemoteAllocator(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name        string
 		host        string
@@ -44,6 +46,8 @@ func TestWithRemoteAllocator(t *testing.T) {
 }
 
 func TestWithLogger(t *testing.T) {
+	t.Parallel()
+
 	t.Run("sets logger on engine", func(t *testing.T) {
 		logger := zerolog.Nop()
 
@@ -55,6 +59,8 @@ func TestWithLogger(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
+	t.Parallel()
+
 	t.Run("creates engine with valid concurrency", func(t *testing.T) {
 		concurrency := 5
 		engine := New(concurrency)
@@ -111,6 +117,8 @@ func TestNew(t *testing.T) {
 }
 
 func TestOptions_CanBeComposed(t *testing.T) {
+	t.Parallel()
+
 	t.Run("options can be created and applied separately", func(t *testing.T) {
 		logger := zerolog.Nop()
 

@@ -11,6 +11,8 @@ import (
 )
 
 func TestPerformTaskUnknownType(t *testing.T) {
+	t.Parallel()
+
 	task := Task{action: "huh", url: "http://example.com"}
 	r := performTask(context.TODO(), &task, pisces.Logger())
 
@@ -21,6 +23,8 @@ func TestPerformTaskUnknownType(t *testing.T) {
 }
 
 func TestTask_SetDevice(t *testing.T) {
+	t.Parallel()
+
 	task := Task{
 		action:   "test",
 		url:      "http://example.com",
@@ -34,6 +38,8 @@ func TestTask_SetDevice(t *testing.T) {
 }
 
 func TestTask_SetUserAgent(t *testing.T) {
+	t.Parallel()
+
 	task := Task{
 		action:   "test",
 		url:      "http://example.com",

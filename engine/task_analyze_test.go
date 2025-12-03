@@ -9,6 +9,8 @@ import (
 )
 
 func TestPerformAnalyzeTask(t *testing.T) {
+	t.Parallel()
+
 	server := piscestest.NewTestWebServer("simple")
 	task := NewTask("analyze", server.URL)
 
