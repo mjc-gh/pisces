@@ -38,6 +38,7 @@ func TestCrawlerVisit(t *testing.T) {
 	scriptIdx := slices.IndexFunc(visit.Assets, matchAsset("script.js"))
 	scriptAsset := visit.Assets[scriptIdx]
 	assert.Equal(t, "Script", scriptAsset.ResourceType)
+	assert.Equal(t, int64(200), scriptAsset.ResponseStatus)
 	assert.NotEmpty(t, scriptAsset.RequestHeaders)
 	assert.NotEmpty(t, scriptAsset.ResponseHeaders)
 	assert.NotEmpty(t, scriptAsset.Body)
@@ -47,6 +48,7 @@ func TestCrawlerVisit(t *testing.T) {
 	styleIdx := slices.IndexFunc(visit.Assets, matchAsset("style.css"))
 	styleAsset := visit.Assets[styleIdx]
 	assert.Equal(t, "Stylesheet", styleAsset.ResourceType)
+	assert.Equal(t, int64(200), styleAsset.ResponseStatus)
 	assert.NotEmpty(t, styleAsset.RequestHeaders)
 	assert.NotEmpty(t, styleAsset.ResponseHeaders)
 	assert.NotEmpty(t, styleAsset.Body)

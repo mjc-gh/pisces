@@ -39,6 +39,7 @@ type Asset struct {
 	ResourceType    string           `json:"resource_type"`
 	RequestHeaders  map[string]any   `json:"request_headers"`
 	ResponseHeaders map[string]any   `json:"response_headers"`
+	ResponseStatus  int64            `json:"response_status,omitempty"`
 	InitiatorURL    string           `json:"initiator_url,omitempty"`
 	Body            string           `json:"body,omitempty"`
 }
@@ -102,6 +103,7 @@ func (c *Crawler) Visit(ctx context.Context, url string, logger *zerolog.Logger)
 		case *network.EventResponseReceived:
 			if asset, ok := visit.assetsMap[string(ev.RequestID)]; ok {
 				asset.ResponseHeaders = ev.Response.Headers
+				asset.ResponseStatus = ev.Response.Status
 
 				secDetails := ev.Response.SecurityDetails
 				if secDetails != nil && secDetails.Protocol != "" && secDetails.Issuer != "" {
