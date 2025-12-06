@@ -14,7 +14,7 @@ test: check
 	go test ./...
 
 watch:
-	watchexec -r -e go -- "make test && make build.cli"
+	watchexec -r -e go,js -- "make test && make build.cli"
 
 chromedp.pull:
 	docker pull chromedp/headless-shell:latest

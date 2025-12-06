@@ -18,4 +18,5 @@ func TestPerformAnalyzeTask(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, "A Simple Web Page", ar.Head.Title)
+	assert.Equal(t, "Simple Page Hello world!", ar.VisibleText)
 }

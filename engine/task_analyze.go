@@ -2,13 +2,26 @@ package engine
 
 import (
 	"context"
+	"embed"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
 	"github.com/rs/zerolog"
 )
+
+//go:embed js/*.js
+var jsFS embed.FS
+
+type AnalyzeResult struct {
+	Forms       []Form `json:"forms"`
+	Links       []Link `json:"links"`
+	Head        Head   `json:"head"`
+	VisibleText string `json:"visible_text"`
+	*Visit
+}
 
 type Input struct {
 	Name  string `json:"name"`
@@ -38,13 +51,6 @@ type Head struct {
 	Viewport        string `json:"viewport"`
 }
 
-type AnalyzeResult struct {
-	Forms []Form `json:"forms"`
-	Links []Link `json:"links"`
-	Head  Head   `json:"head"`
-	*Visit
-}
-
 func performAnalyzeTask(ctx context.Context, task *Task, logger *zerolog.Logger) (AnalyzeResult, error) {
 	ctx, cancel := chromedp.NewContext(ctx)
 	defer cancel()
@@ -65,19 +71,40 @@ func performAnalyzeTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 
 	wait := task.WaitFor()
 
+	if err = extractVisibleText(ctx, wait, &result); err != nil {
+		logger.Warn().Msgf("visible text error: %v", err)
+	}
+
 	if err = runFormAnalysis(ctx, wait, &result); err != nil {
-		logger.Warn().Msgf("analyze task form analysis error: %v", err)
+		logger.Warn().Msgf("form analysis error: %v", err)
 	}
 
 	if err = runLinkAnalysis(ctx, wait, &result); err != nil {
-		logger.Warn().Msgf("analyze task href analysis error: %v", err)
+		logger.Warn().Msgf("href analysis error: %v", err)
 	}
 
 	if err = runHeadAnalysis(ctx, wait, &result); err != nil {
-		logger.Warn().Msgf("analyze task head analysis error: %v", err)
+		logger.Warn().Msgf("head analysis error: %v", err)
 	}
 
 	return result, nil
+}
+
+func extractVisibleText(ctx context.Context, wait int64, result *AnalyzeResult) error {
+	var visibleText string
+
+	js, err := jsFS.ReadFile("js/visible_text.js")
+	if err != nil {
+		return err
+	}
+
+	if err = chromedp.Run(ctx, chromedp.Evaluate(string(js), &visibleText)); err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	result.VisibleText = visibleText
+	return nil
 }
 
 func runFormAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) error {

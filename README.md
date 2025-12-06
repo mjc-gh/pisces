@@ -25,7 +25,7 @@ USAGE:
    pisces [global options] [command [command options]]
 
 VERSION:
-   0.0.0
+   0.0.3
 
 COMMANDS:
    analyze     Analyze and interact one or more URLs for phishing
@@ -162,6 +162,7 @@ Below is an example of the `analyze` task's output for a single visit to `login.
     "shortcut_icon_url": "https://s.yimg.com/wm/mbr/images/yahoo-yep-favicon-v1.ico",
     "viewport": "initial-scale=1, maximum-scale=1, user-scalable=0, shrink-to-fit=no"
   },
+  "visible_text": "Help Terms Privacy Sign in using your Yahoo account Username, em...",
   "requested_url": "https://login.yahoo.com/",
   "location": "https://login.yahoo.com/",
   "redirect_locations": null,

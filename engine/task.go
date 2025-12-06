@@ -100,9 +100,11 @@ func performTask(ctx context.Context, task *Task, logger *zerolog.Logger) Result
 		URL:    task.url,
 	}
 
+	tlog := logger.With().Str("action", task.action).Logger()
+
 	switch task.action {
 	case "analyze":
-		payload, err := performAnalyzeTask(ctx, task, logger)
+		payload, err := performAnalyzeTask(ctx, task, &tlog)
 		if err != nil {
 			return newErrorResult(task, err)
 		}
@@ -110,7 +112,7 @@ func performTask(ctx context.Context, task *Task, logger *zerolog.Logger) Result
 		result.Result = &payload
 
 	case "collect":
-		payload, err := performCollectTask(ctx, task, logger)
+		payload, err := performCollectTask(ctx, task, &tlog)
 		if err != nil {
 			return newErrorResult(task, err)
 		}
@@ -118,7 +120,7 @@ func performTask(ctx context.Context, task *Task, logger *zerolog.Logger) Result
 		result.Result = &payload
 
 	case "screenshot":
-		payload, err := performScreenshotTask(ctx, task, logger)
+		payload, err := performScreenshotTask(ctx, task, &tlog)
 		if err != nil {
 			return newErrorResult(task, err)
 		}
