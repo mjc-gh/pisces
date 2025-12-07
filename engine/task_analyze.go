@@ -69,7 +69,7 @@ func performAnalyzeTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 	result := AnalyzeResult{Visit: visit}
 	result.Head = Head{}
 
-	wait := task.WaitFor()
+	wait := int64(task.IntParam("wait", 50))
 
 	if err = extractVisibleText(ctx, wait, &result); err != nil {
 		logger.Warn().Msgf("visible text error: %v", err)

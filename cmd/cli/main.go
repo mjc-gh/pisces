@@ -43,6 +43,10 @@ func main() {
 		&cli.StringFlag{Name: "output", Value: "pisces.ndjson", Aliases: []string{"o"}},
 	}, baseFlags...)
 
+	withWaitFlags := append([]cli.Flag{
+		&cli.IntFlag{Name: "wait", Value: 300, Aliases: []string{"w"}},
+	}, withOutputFlags...)
+
 	ver := version
 	if ver == "" {
 		ver = "0.0.0"
@@ -57,9 +61,12 @@ func main() {
 				Name:      "analyze",
 				Usage:     "Analyze and interact one or more URLs for phishing",
 				Arguments: baseArgs,
-				Flags:     withOutputFlags,
+				Flags:     withWaitFlags,
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					return runTask(ctx, cmd, "analyze", outputResultJson)
+					params := map[string]any{}
+					params["wait"] = cmd.Int("wait")
+
+					return runTask(ctx, cmd, "analyze", params, outputResultJson)
 				},
 			},
 			{
@@ -68,7 +75,7 @@ func main() {
 				Arguments: baseArgs,
 				Flags:     withOutputFlags,
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					return runTask(ctx, cmd, "collect", outputResultJson)
+					return runTask(ctx, cmd, "collect", map[string]any{}, outputResultJson)
 				},
 			},
 			{
@@ -79,7 +86,7 @@ func main() {
 					&cli.StringFlag{Name: "output-dir", Value: "tmp/", Aliases: []string{"o"}},
 				}, baseFlags...),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					return runTask(ctx, cmd, "screenshot", func(cmd *cli.Command, e *engine.Engine) error {
+					return runTask(ctx, cmd, "screenshot", map[string]any{}, func(cmd *cli.Command, e *engine.Engine) error {
 						outputDir := cmd.String("output-dir")
 						err := os.MkdirAll(outputDir, 0755)
 						if err != nil {
@@ -126,7 +133,7 @@ func main() {
 	}
 }
 
-func runTask(ctx context.Context, cmd *cli.Command, name string, callback taskCallbackFn) error {
+func runTask(ctx context.Context, cmd *cli.Command, name string, params map[string]any, callback taskCallbackFn) error {
 	logger = pisces.SetupLogger(cmd.Bool("debug"))
 
 	deviceSize := cmd.StringArg("device-size")
@@ -145,9 +152,12 @@ func runTask(ctx context.Context, cmd *cli.Command, name string, callback taskCa
 	e.Start(ctx)
 
 	for _, url := range urls {
-		t := engine.NewTask(name, url)
-		t.SetDevice(deviceType, deviceSize)
-		t.SetUserAgent(deviceType, cmd.StringArg("user-agent"))
+		t := engine.NewTask(
+			name, url,
+			engine.WithParams(params),
+			engine.WithDeviceProperties(deviceType, deviceSize),
+			engine.WithUserAgent(deviceType, cmd.StringArg("user-agent")),
+		)
 
 		e.Add(t)
 	}
