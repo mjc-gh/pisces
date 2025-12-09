@@ -35,7 +35,7 @@ release:
 	NEW_PATCH=$$((PATCH + 1)); \
 	NEW_TAG="v$$MAJOR.$$MINOR.$$NEW_PATCH"; \
 	echo "Creating new tag: $$NEW_TAG"; \
-	git tag -a $$NEW_TAG -m "Release $$NEW_TAG"; \
+	git tag -s -a $$NEW_TAG -m "Release $$NEW_TAG"; \
 	echo "Pushing tag to origin..."; \
 	git push origin $$NEW_TAG; \
 	echo "Release $$NEW_TAG created and pushed successfully!"
