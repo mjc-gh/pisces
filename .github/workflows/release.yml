@@ -54,9 +54,25 @@ jobs:
           zip -r pisces-win-amd64.zip artifacts/pisces-windows-amd64/pisces
           zip -r pisces-win-arm64.zip artifacts/pisces-windows-arm64/pisces
 
+      - name: Generate release notes
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0)
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 ${LATEST_TAG}^)
+
+          echo "Generating release notes from ${PREVIOUS_TAG} to ${LATEST_TAG}"
+
+          RELEASE_NOTES=$(git log ${PREVIOUS_TAG}..${LATEST_TAG} \
+            --pretty=format:"- %s (%h)" \
+            --no-merges \
+            | grep -v "\[no-notes\]" || true)
+
+          echo $RELEASE_NOTES > ${{ github.workspace }}_RELEASE_NOTES.md
+
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
+          body_path: ${{ github.workspace }}_RELEASE_NOTES.txt
+          draft: true
           files: |
             pisces-darwin-amd64.tar.gz
             pisces-darwin-arm64.tar.gz
