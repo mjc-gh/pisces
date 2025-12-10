@@ -28,6 +28,12 @@ test-docker:
 	docker build -f Dockerfile.dev -t pisces-dev . && \
 	docker run --rm -it -v "$$PWD":/app -w /app pisces-dev go test -v ./internal/piscestest
 
+run-docker:
+	docker build -t pisces . && \
+	docker run --rm -it \
+		-v "$$PWD":/app \
+		-w /app \
+		pisces $(ARGS)
 
 release:
 	@echo "Creating new release..."

@@ -28,6 +28,12 @@ docker run --rm \
           analyze https://google.com
 ```
 
+This also works with the Make command `make run-docker ARGS="[args]"`.
+
+### Dockerfile.dev
+
+`Dockerfile.dev` works along with the `make test-docker` command to run the integration tests within a container.
+
 ## Usage
 
 ```
