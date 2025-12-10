@@ -1,0 +1,25 @@
+# Development / test image for Pisces.
+# Includes:
+#   - Go toolchain
+#   - Chromium browser for chromedp-based tests
+#
+# Usage:
+#   docker build -f Dockerfile.dev -t pisces-dev .
+#   docker run --rm -it -v "$PWD":/app -w /app pisces-dev go test ./...
+
+FROM golang:1.24.4-bookworm
+
+RUN apt update && \
+    apt install -y --no-install-recommends \
+        chromium \
+        ca-certificates \
+        fonts-liberation \
+        tzdata \
+        git \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV CHROME_PATH=/usr/bin/chromium
+
+WORKDIR /app
+
+CMD ["/bin/bash"]
