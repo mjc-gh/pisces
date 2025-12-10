@@ -24,11 +24,11 @@ chromedp.run:
 
 .PHONY: release
 
-test-docker:
+test.docker:
 	docker build -f Dockerfile.dev -t pisces-dev . && \
 	docker run --rm -it -v "$$PWD":/app -w /app pisces-dev go test -v ./...
 
-run-docker:
+run.docker:
 	docker build -t pisces . && \
 	docker run --rm -it \
 		-v "$$PWD":/app \
