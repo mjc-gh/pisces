@@ -1,0 +1,14 @@
+title: Pisces – Google Page
+id: pisces-google-login-001
+status: experimental
+description: Detects Google home pages by title.
+author: HuskyHacks
+
+logsource:
+  product: pisces
+  service: scanner
+
+detection:
+  selection:
+    result.head.title|re: "(?i)google"
+  condition: selection

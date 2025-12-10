@@ -16,6 +16,24 @@ make build.cli
 ./build/pisces -h
 ```
 
+### Dockerfile
+
+The Dockerfile supports running Pisces as a container. The container adds the built binary to a `chromedp` headless container to run the scanner.
+
+Example:
+```
+docker run --rm \
+          -v "$(pwd)":/app \
+          pisces:latest \
+          analyze https://google.com
+```
+
+This also works with the Make command `make run.docker ARGS="[args]"`.
+
+### Dockerfile.dev
+
+`Dockerfile.dev` works along with the `make test.docker` command to run the integration tests within a container.
+
 ## Usage
 
 ```

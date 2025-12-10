@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/mjc-gh/pisces/internal/browser"
@@ -10,9 +11,9 @@ import (
 )
 
 type config struct {
-	concurreny int
-	remoteUrl  string
-	headfull   bool
+	concurrency int
+	remoteURL   string
+	headfull    bool
 }
 
 type Engine struct {
@@ -28,7 +29,7 @@ type Option func(*Engine)
 
 func WithRemoteAllocator(host string, port int) Option {
 	return func(e *Engine) {
-		e.config.remoteUrl = fmt.Sprintf("http://%s:%d/json/version", host, port)
+		e.config.remoteURL = fmt.Sprintf("http://%s:%d/json/version", host, port)
 	}
 }
 
@@ -44,16 +45,17 @@ func WithLogger(l *zerolog.Logger) Option {
 	}
 }
 
-// Start our engine and goroutines worker pool
-func New(concurreny int, opts ...Option) *Engine {
-	if concurreny < 1 {
-		concurreny = 1
+func New(concurrency int, opts ...Option) *Engine {
+	if concurrency < 1 {
+		concurrency = 1
 	}
 
 	e := Engine{
-		config:  config{concurreny: concurreny},
+		config: config{
+			concurrency: concurrency,
+		},
 		results: make(chan Result),
-		tasks:   make(chan Task, concurreny),
+		tasks:   make(chan Task, concurrency),
 		wg:      sync.WaitGroup{},
 	}
 
@@ -61,17 +63,22 @@ func New(concurreny int, opts ...Option) *Engine {
 		opt(&e)
 	}
 
+	if e.logger == nil {
+		l := zerolog.New(os.Stderr).With().Timestamp().Logger()
+		e.logger = &l
+	}
+
 	return &e
 }
 
 func (e *Engine) Start(ctx context.Context) {
-	if e.config.remoteUrl != "" {
-		ctx, e.browserCancel = browser.StartRemote(ctx, e.config.remoteUrl)
+	if e.config.remoteURL != "" {
+		ctx, e.browserCancel = browser.StartRemote(ctx, e.config.remoteURL)
 	} else {
 		ctx, e.browserCancel = browser.StartLocal(ctx, e.config.headfull)
 	}
 
-	for i := 0; i < e.config.concurreny; i++ {
+	for i := 0; i < e.config.concurrency; i++ {
 		e.wg.Add(1)
 
 		go func(idx int, tasks <-chan Task, results chan<- Result, done func(), logger *zerolog.Logger) {
@@ -88,7 +95,6 @@ func (e *Engine) Start(ctx context.Context) {
 	}
 }
 
-// Blocks until workers goroutines have completed their tasks
 func (e *Engine) Shutdown() {
 	e.logger.Debug().Msg("shutdown called")
 	defer e.logger.Debug().Msg("shutdown done")
@@ -100,15 +106,12 @@ func (e *Engine) Shutdown() {
 	close(e.tasks)
 	e.wg.Wait()
 	close(e.results)
-
 }
 
-// Get the Results channel
-func (e *Engine) Results() chan Result {
+func (e *Engine) Results() <-chan Result {
 	return e.results
 }
 
-// Add work to the tasks queue
 func (e *Engine) Add(t Task) {
 	e.tasks <- t
 }

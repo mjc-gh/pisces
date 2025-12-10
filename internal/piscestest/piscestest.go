@@ -26,21 +26,25 @@ func NewTestWebServer(dir string) *httptest.Server {
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Get the file path from the request
-	path := r.URL.Path
-	fullPath := filepath.Join("testdata", h.dir, path)
+    path := r.URL.Path
 
-	file, err := testFS.Open(fullPath)
-	if err != nil {
-		http.Error(w, "File not found", http.StatusNotFound)
-		return
-	} else if _, err := file.Stat(); errors.Is(err, os.ErrNotExist) {
-		http.Error(w, "File not found", http.StatusNotFound)
-		return
-	}
+    // If the client requests "/", serve "index.html" in that directory.
+    if path == "/" || path == "" {
+        path = "/index.html"
+    }
 
-	// Serve the file
-	http.ServeFileFS(w, r, testFS, fullPath)
+    fullPath := filepath.Join("testdata", h.dir, path)
+
+    file, err := testFS.Open(fullPath)
+    if err != nil {
+        http.Error(w, "File not found", http.StatusNotFound)
+        return
+    } else if _, err := file.Stat(); errors.Is(err, os.ErrNotExist) {
+        http.Error(w, "File not found", http.StatusNotFound)
+        return
+    }
+
+    http.ServeFileFS(w, r, testFS, fullPath)
 }
 
 func NewTestContext() (context.Context, context.CancelFunc) {

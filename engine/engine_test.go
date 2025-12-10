@@ -40,7 +40,7 @@ func TestWithRemoteAllocator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			engine := New(1, WithRemoteAllocator(tt.host, tt.port))
 
-			assert.Equal(t, tt.expectedUrl, engine.config.remoteUrl)
+			assert.Equal(t, tt.expectedUrl, engine.config.remoteURL)
 		})
 	}
 }
@@ -66,17 +66,17 @@ func TestNew(t *testing.T) {
 		engine := New(concurrency)
 
 		assert.NotNil(t, engine)
-		assert.Equal(t, concurrency, engine.config.concurreny)
+		assert.Equal(t, concurrency, engine.config.concurrency)
 		assert.NotNil(t, engine.results)
 		assert.NotNil(t, engine.tasks)
 	})
 
 	t.Run("sets minimum concurrency to 1 when less than 1", func(t *testing.T) {
 		engine := New(0)
-		assert.Equal(t, 1, engine.config.concurreny)
+		assert.Equal(t, 1, engine.config.concurrency)
 
 		engine = New(-5)
-		assert.Equal(t, 1, engine.config.concurreny)
+		assert.Equal(t, 1, engine.config.concurrency)
 	})
 
 	t.Run("creates engine with multiple options", func(t *testing.T) {
@@ -91,18 +91,20 @@ func TestNew(t *testing.T) {
 			WithLogger(&logger),
 		)
 
-		assert.Equal(t, concurrency, engine.config.concurreny)
-		assert.Equal(t, "http://localhost:9222/json/version", engine.config.remoteUrl)
+		assert.Equal(t, concurrency, engine.config.concurrency)
+		assert.Equal(t, "http://localhost:9222/json/version", engine.config.remoteURL)
 		assert.Equal(t, &logger, engine.logger)
 	})
 
 	t.Run("creates engine with no options", func(t *testing.T) {
 		engine := New(2)
 
-		assert.Equal(t, 2, engine.config.concurreny)
-		assert.Empty(t, engine.config.remoteUrl)
-		assert.Nil(t, engine.logger)
+		assert.NotNil(t, engine)
+		assert.Equal(t, 2, engine.config.concurrency)
+		assert.Empty(t, engine.config.remoteURL)
+		assert.NotNil(t, engine.logger)
 	})
+
 
 	t.Run("channels have correct buffer sizes", func(t *testing.T) {
 		concurrency := 10
@@ -129,8 +131,8 @@ func TestOptions_CanBeComposed(t *testing.T) {
 
 		engine := New(4, opts...)
 
-		assert.Equal(t, 4, engine.config.concurreny)
-		assert.Equal(t, "http://192.168.1.1:8080/json/version", engine.config.remoteUrl)
+		assert.Equal(t, 4, engine.config.concurrency)
+		assert.Equal(t, "http://192.168.1.1:8080/json/version", engine.config.remoteURL)
 		assert.Equal(t, &logger, engine.logger)
 	})
 }
@@ -143,6 +145,6 @@ func TestWithRemoteAllocator_UrlFormat(t *testing.T) {
 		opt := WithRemoteAllocator("test.example.com", 9999)
 		opt(engine)
 
-		assert.Equal(t, "http://test.example.com:9999/json/version", engine.config.remoteUrl)
+		assert.Equal(t, "http://test.example.com:9999/json/version", engine.config.remoteURL)
 	})
 }

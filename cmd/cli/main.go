@@ -18,8 +18,10 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-var logger *zerolog.Logger
-var version string
+var (
+	logger  *zerolog.Logger
+	version string
+)
 
 type taskCallbackFn = func(*cli.Command, *engine.Engine) error
 
@@ -29,23 +31,28 @@ func main() {
 	}
 
 	baseFlags := []cli.Flag{
-		&cli.BoolFlag{Name: "debug", Aliases: []string{"d"}},
-		&cli.BoolFlag{Name: "remote", Aliases: []string{"r"}},
-		&cli.BoolFlag{Name: "headfull", Aliases: []string{"H"}},
-		&cli.IntFlag{Name: "concurrency", Aliases: []string{"c"}},
-		&cli.IntFlag{Name: "port", Value: 9222},
-		&cli.StringFlag{Name: "device-type", Value: "desktop", Action: validDeviceType},
-		&cli.StringFlag{Name: "device-size", Value: "large", Action: validDeviceSize},
-		&cli.StringFlag{Name: "host", Value: "127.0.0.1"},
-		&cli.StringFlag{Name: "user-agent", Value: "chrome"},
+		&cli.BoolFlag{Name: "debug", Aliases: []string{"d"}, Usage: "enable debug logging"},
+		&cli.BoolFlag{Name: "remote", Aliases: []string{"r"}, Usage: "use a remote Chrome DevTools instance"},
+		&cli.BoolFlag{Name: "headfull", Aliases: []string{"H"}, Usage: "run browser in headfull mode"},
+		&cli.IntFlag{Name: "concurrency", Aliases: []string{"c"}, Usage: "number of concurrent workers"},
+		&cli.IntFlag{Name: "port", Value: 9222, Usage: "remote DevTools port"},
+		&cli.StringFlag{Name: "device-type", Value: "desktop", Usage: "device type (desktop/mobile/tablet)", Action: validDeviceType},
+		&cli.StringFlag{Name: "device-size", Value: "large", Usage: "device size preset", Action: validDeviceSize},
+		&cli.StringFlag{Name: "host", Value: "127.0.0.1", Usage: "remote DevTools host"},
+		&cli.StringFlag{Name: "user-agent", Value: "chrome", Usage: "browser user-agent preset"},
+		&cli.StringFlag{
+			Name:  "rules-dir",
+			Value: "rules",
+			Usage: "directory containing Sigma rules (default: rules/)",
+		},
 	}
 
 	withOutputFlags := append([]cli.Flag{
-		&cli.StringFlag{Name: "output", Value: "pisces.ndjson", Aliases: []string{"o"}},
+		&cli.StringFlag{Name: "output", Value: "pisces.ndjson", Aliases: []string{"o"}, Usage: "output NDJSON file"},
 	}, baseFlags...)
 
 	withWaitFlags := append([]cli.Flag{
-		&cli.IntFlag{Name: "wait", Value: 300, Aliases: []string{"w"}},
+		&cli.IntFlag{Name: "wait", Value: 300, Aliases: []string{"w"}, Usage: "wait time (seconds) after load before analysis"},
 	}, withOutputFlags...)
 
 	ver := version
@@ -64,9 +71,9 @@ func main() {
 				Arguments: baseArgs,
 				Flags:     withWaitFlags,
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					params := map[string]any{}
-					params["wait"] = cmd.Int("wait")
-
+					params := map[string]any{
+						"wait": cmd.Int("wait"),
+					}
 					return runTask(ctx, cmd, "analyze", params, outputResultJson)
 				},
 			},
@@ -84,46 +91,10 @@ func main() {
 				Usage:     "Screenshot one or more URLs",
 				Arguments: baseArgs,
 				Flags: append([]cli.Flag{
-					&cli.StringFlag{Name: "output-dir", Value: "tmp/", Aliases: []string{"o"}},
+					&cli.StringFlag{Name: "output-dir", Value: "tmp/", Aliases: []string{"o"}, Usage: "directory for screenshots"},
 				}, baseFlags...),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					return runTask(ctx, cmd, "screenshot", map[string]any{}, func(cmd *cli.Command, e *engine.Engine) error {
-						outputDir := cmd.String("output-dir")
-						err := os.MkdirAll(outputDir, 0755)
-						if err != nil {
-							return err
-						}
-
-						for r := range e.Results() {
-							if r.Error != nil {
-								logger.Warn().Msgf("result error: %v", r.Error)
-								continue
-							}
-
-							logger.Info().Msgf("result for %s (duration %s)", r.URL, r.Elapsed.String())
-
-							sr, ok := r.Result.(*engine.ScreenshotResult)
-							if !ok {
-								return errors.New("screenshot result error")
-							}
-
-							fileName, err := urlToFilename(r.URL)
-							if err != nil {
-								return err
-							}
-
-							out, err := os.Create(filepath.Join(outputDir, fmt.Sprintf("%s.png", fileName)))
-							if err != nil {
-								return err
-							}
-
-							if _, err = out.Write(*sr.Buffer); err != nil {
-								return err
-							}
-						}
-
-						return nil
-					})
+					return runTask(ctx, cmd, "screenshot", map[string]any{}, screenshotCallback)
 				},
 			},
 		},
@@ -176,7 +147,80 @@ func outputResultJson(cmd *cli.Command, e *engine.Engine) error {
 	output := cmd.String("output")
 	out, err := os.Create(output)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("create output file: %w", err)
+	}
+	defer func() {
+		if cerr := out.Close(); cerr != nil {
+			logger.Warn().Err(cerr).Msg("file close error")
+		}
+	}()
+
+	rulesDir := cmd.String("rules-dir")
+	if rulesDir == "" {
+		rulesDir = "rules"
+	}
+
+	if rulesDir != "rules" {
+		logger.Info().Str("rules_dir", rulesDir).Msg("using custom Sigma rules directory")
+	}
+
+	if err := engine.InitSigmaEngine(rulesDir, logger); err != nil {
+		logger.Warn().Err(err).Msg("failed to initialize Sigma engine")
+	}
+
+	ctx := context.Background()
+
+	for r := range e.Results() {
+		if r.Error != nil {
+			logger.Warn().Msgf("result error: %v", r.Error)
+			continue
+		}
+
+		matches, err := engine.EvaluateSigmaResult(ctx, r, logger)
+		if err != nil {
+			logger.Warn().Err(err).Msg("sigma evaluation error")
+		} else {
+			for _, m := range matches {
+				if !m.Match {
+					continue
+				}
+				logger.Info().
+					Str("rule_id", m.Rule.ID).
+					Str("title", m.Rule.Title).
+					Str("url", r.URL).
+					Msg("[+] SIGMA ALERT: rule matched for URL")
+			}
+		}
+
+		logger.Info().
+			Str("url", r.URL).
+			Str("duration", r.Elapsed.String()).
+			Msg("result")
+
+		line, err := json.Marshal(r.Result)
+		if err != nil {
+			logger.Warn().Err(err).Msg("result JSON marshal error")
+			continue
+		}
+		if _, err = out.Write(line); err != nil {
+			logger.Warn().Err(err).Msg("result JSON write error")
+			continue
+		}
+		if _, err = out.Write([]byte("\n")); err != nil {
+			logger.Warn().Err(err).Msg("result JSON newline write error")
+			continue
+		}
+		logger.Debug().Msgf("wrote to file %s", output)
+	}
+
+	logger.Info().Msg("done")
+	return nil
+}
+
+func screenshotCallback(cmd *cli.Command, e *engine.Engine) error {
+	outputDir := cmd.String("output-dir")
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return fmt.Errorf("create output dir: %w", err)
 	}
 
 	for r := range e.Results() {
@@ -185,29 +229,35 @@ func outputResultJson(cmd *cli.Command, e *engine.Engine) error {
 			continue
 		}
 
-		logger.Info().Msgf("result for %s (duration %s)", r.URL, r.Elapsed.String())
+		logger.Info().
+			Str("url", r.URL).
+			Str("duration", r.Elapsed.String()).
+			Msg("screenshot result")
 
-		line, err := json.Marshal(r.Result)
+		sr, ok := r.Result.(*engine.ScreenshotResult)
+		if !ok {
+			return errors.New("screenshot result error: unexpected type")
+		}
+
+		fileName, err := urlToFilename(r.URL)
 		if err != nil {
-			logger.Warn().Msgf("result json marshal error: %v", r.Error)
+			return fmt.Errorf("build screenshot filename: %w", err)
 		}
 
-		if _, err = out.Write(line); err != nil {
-			logger.Warn().Msgf("result json write error: %v", r.Error)
+		outPath := filepath.Join(outputDir, fmt.Sprintf("%s.png", fileName))
+		out, err := os.Create(outPath)
+		if err != nil {
+			return fmt.Errorf("create screenshot file: %w", err)
 		}
 
-		if _, err = out.Write([]byte("\n")); err != nil {
-			logger.Warn().Msgf("result json write error: %v", r.Error)
+		if _, err = out.Write(*sr.Buffer); err != nil {
+			out.Close()
+			return fmt.Errorf("write screenshot file: %w", err)
 		}
-
-		logger.Debug().Msgf("wrote to file %s", output)
+		if err := out.Close(); err != nil {
+			return fmt.Errorf("close screenshot file: %w", err)
+		}
 	}
-
-	if err = out.Close(); err != nil {
-		logger.Warn().Msgf("file close error: %v", err)
-	}
-
-	logger.Info().Msg("done")
 
 	return nil
 }
@@ -216,7 +266,6 @@ func validDeviceType(ctx context.Context, cmd *cli.Command, v string) error {
 	if !browser.IsValidDeviceType(v) {
 		return fmt.Errorf("invalid device type: %v", v)
 	}
-
 	return nil
 }
 
@@ -224,7 +273,6 @@ func validDeviceSize(ctx context.Context, cmd *cli.Command, v string) error {
 	if !browser.IsValidDeviceSize(v) {
 		return fmt.Errorf("invalid device size: %v", v)
 	}
-
 	return nil
 }
 
@@ -237,14 +285,15 @@ func urlToFilename(taskURL string) (string, error) {
 	domain := u.Host
 	path := u.Path
 
-	combined := domain + path
-	combined = strings.Trim(combined, "/")
+	combined := strings.Trim(domain+path, "/")
 
 	safe := strings.Map(func(r rune) rune {
-		if r == '/' || r == '\\' || r == ':' || r == '*' || r == '?' || r == '"' || r == '<' || r == '>' || r == '|' || r == '.' {
+		switch r {
+		case '/', '\\', ':', '*', '?', '"', '<', '>', '|', '.':
 			return '_'
+		default:
+			return r
 		}
-		return r
 	}, combined)
 
 	if safe == "" {
