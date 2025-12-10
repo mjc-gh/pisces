@@ -3,6 +3,7 @@ module github.com/mjc-gh/pisces
 go 1.24.4
 
 require (
+	github.com/bradleyjkemp/sigma-go v0.6.6
 	github.com/chromedp/cdproto v0.0.0-20250724212937-08a3db8b4327
 	github.com/chromedp/chromedp v0.14.2
 	github.com/rs/zerolog v1.34.0
@@ -11,6 +12,10 @@ require (
 )
 
 require (
+	github.com/BobuSumisu/aho-corasick v1.0.3 // indirect
+	github.com/PaesslerAG/gval v1.0.0 // indirect
+	github.com/PaesslerAG/jsonpath v0.1.1 // indirect
+	github.com/alecthomas/participle v0.7.1 // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-json-experiment/json v0.0.0-20250725192818-e39067aee2d2 // indirect

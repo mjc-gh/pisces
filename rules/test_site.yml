@@ -1,0 +1,14 @@
+title: Pisces – Test Title Match
+id: pisces-test-title-001
+status: experimental
+description: Detects pages whose HTML title is the known Pisces test string.
+author: HuskyHacks
+
+logsource:
+  product: pisces
+  service: scanner
+
+detection:
+  selection:
+    result.head.title: "PISCES TEST TITLE 123"
+  condition: selection
