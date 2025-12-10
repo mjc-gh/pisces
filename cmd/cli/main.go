@@ -31,28 +31,28 @@ func main() {
 	}
 
 	baseFlags := []cli.Flag{
-		&cli.BoolFlag{Name: "debug", Aliases: []string{"d"}},
-		&cli.BoolFlag{Name: "remote", Aliases: []string{"r"}},
-		&cli.BoolFlag{Name: "headfull", Aliases: []string{"H"}},
-		&cli.IntFlag{Name: "concurrency", Aliases: []string{"c"}},
-		&cli.IntFlag{Name: "port", Value: 9222},
-		&cli.StringFlag{Name: "device-type", Value: "desktop", Action: validDeviceType},
-		&cli.StringFlag{Name: "device-size", Value: "large", Action: validDeviceSize},
-		&cli.StringFlag{Name: "host", Value: "127.0.0.1"},
-		&cli.StringFlag{Name: "user-agent", Value: "chrome"},
+		&cli.BoolFlag{Name: "debug", Aliases: []string{"d"}, Usage: "enable debug logging"},
+		&cli.BoolFlag{Name: "remote", Aliases: []string{"r"}, Usage: "use a remote Chrome DevTools instance"},
+		&cli.BoolFlag{Name: "headfull", Aliases: []string{"H"}, Usage: "run browser in headfull mode"},
+		&cli.IntFlag{Name: "concurrency", Aliases: []string{"c"}, Usage: "number of concurrent workers"},
+		&cli.IntFlag{Name: "port", Value: 9222, Usage: "remote DevTools port"},
+		&cli.StringFlag{Name: "device-type", Value: "desktop", Usage: "device type (desktop/mobile/tablet)", Action: validDeviceType},
+		&cli.StringFlag{Name: "device-size", Value: "large", Usage: "device size preset", Action: validDeviceSize},
+		&cli.StringFlag{Name: "host", Value: "127.0.0.1", Usage: "remote DevTools host"},
+		&cli.StringFlag{Name: "user-agent", Value: "chrome", Usage: "browser user-agent preset"},
 		&cli.StringFlag{
 			Name:  "rules-dir",
 			Value: "rules",
-			Usage: "directory containing Sigma rules",
+			Usage: "directory containing Sigma rules (default: rules/)",
 		},
 	}
 
 	withOutputFlags := append([]cli.Flag{
-		&cli.StringFlag{Name: "output", Value: "pisces.ndjson", Aliases: []string{"o"}},
+		&cli.StringFlag{Name: "output", Value: "pisces.ndjson", Aliases: []string{"o"}, Usage: "output NDJSON file"},
 	}, baseFlags...)
 
 	withWaitFlags := append([]cli.Flag{
-		&cli.IntFlag{Name: "wait", Value: 300, Aliases: []string{"w"}},
+		&cli.IntFlag{Name: "wait", Value: 300, Aliases: []string{"w"}, Usage: "wait time (seconds) after load before analysis"},
 	}, withOutputFlags...)
 
 	ver := version
@@ -71,9 +71,9 @@ func main() {
 				Arguments: baseArgs,
 				Flags:     withWaitFlags,
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					params := map[string]any{}
-					params["wait"] = cmd.Int("wait")
-
+					params := map[string]any{
+						"wait": cmd.Int("wait"),
+					}
 					return runTask(ctx, cmd, "analyze", params, outputResultJson)
 				},
 			},
@@ -91,7 +91,7 @@ func main() {
 				Usage:     "Screenshot one or more URLs",
 				Arguments: baseArgs,
 				Flags: append([]cli.Flag{
-					&cli.StringFlag{Name: "output-dir", Value: "tmp/", Aliases: []string{"o"}},
+					&cli.StringFlag{Name: "output-dir", Value: "tmp/", Aliases: []string{"o"}, Usage: "directory for screenshots"},
 				}, baseFlags...),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					return runTask(ctx, cmd, "screenshot", map[string]any{}, screenshotCallback)
@@ -149,7 +149,6 @@ func outputResultJson(cmd *cli.Command, e *engine.Engine) error {
 	if err != nil {
 		return fmt.Errorf("create output file: %w", err)
 	}
-
 	defer func() {
 		if cerr := out.Close(); cerr != nil {
 			logger.Warn().Err(cerr).Msg("file close error")
@@ -159,6 +158,10 @@ func outputResultJson(cmd *cli.Command, e *engine.Engine) error {
 	rulesDir := cmd.String("rules-dir")
 	if rulesDir == "" {
 		rulesDir = "rules"
+	}
+
+	if rulesDir != "rules" {
+		logger.Info().Str("rules_dir", rulesDir).Msg("using custom Sigma rules directory")
 	}
 
 	if err := engine.InitSigmaEngine(rulesDir, logger); err != nil {
