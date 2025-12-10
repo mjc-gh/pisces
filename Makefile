@@ -26,7 +26,7 @@ chromedp.run:
 
 test-docker:
 	docker build -f Dockerfile.dev -t pisces-dev . && \
-	docker run --rm -it -v "$$PWD":/app -w /app pisces-dev go test -v ./internal/piscestest
+	docker run --rm -it -v "$$PWD":/app -w /app pisces-dev go test -v ./...
 
 run-docker:
 	docker build -t pisces . && \
