@@ -18,12 +18,15 @@ func performScreenshotTask(ctx context.Context, task *Task, logger *zerolog.Logg
 	ctx, cancel := chromedp.NewContext(ctx)
 	defer cancel()
 
-	if err := chromedp.Run(ctx,
+	err := chromedp.Run(ctx,
 		chromedp.EmulateViewport(int64(task.winWidth), int64(task.winHeight)),
 		emulation.SetUserAgentOverride(task.userAgent),
 		chromedp.Navigate(task.url),
 		chromedp.CaptureScreenshot(&buf),
-	); err != nil {
+	)
+	if err != nil {
+		logger.Debug().Msgf("screenshot err: %v", err)
+
 		return ScreenshotResult{}, err
 	}
 

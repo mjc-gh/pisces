@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"errors"
 
 	"github.com/chromedp/chromedp"
 	"github.com/rs/zerolog"
@@ -27,7 +26,7 @@ func performCollectTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 
 	visit := crawler.LastVisit()
 	if visit == nil {
-		return CollectResult{}, errors.New("no visit from crawler")
+		return CollectResult{}, ErrNoCrawlerVisit
 	}
 
 	result := CollectResult{Visit: visit}

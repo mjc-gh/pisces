@@ -1,220 +1,233 @@
 package engine
 
 import (
-    "context"
-    "encoding/json"
-    "os"
-    "path/filepath"
-    "strings"
-	"fmt"
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 
-    sigma "github.com/bradleyjkemp/sigma-go"
-    sigeval "github.com/bradleyjkemp/sigma-go/evaluator"
-    "github.com/rs/zerolog"
+	sigma "github.com/bradleyjkemp/sigma-go"
+	sigeval "github.com/bradleyjkemp/sigma-go/evaluator"
+	"github.com/rs/zerolog"
 )
 
 type SigmaEngine struct {
-    bundle sigeval.RuleEvaluatorBundle
-    rules  []sigma.Rule
+	bundle sigeval.RuleEvaluatorBundle
+	rules  []sigma.Rule
 }
 
 var sigmaEngine *SigmaEngine
 
 func InitSigmaEngine(rulesDir string, logger *zerolog.Logger) error {
-    info, err := os.Stat(rulesDir)
-    if err != nil {
-        if os.IsNotExist(err) {
-            logger.Info().
-                Str("rules_dir", rulesDir).
-                Msg("no Sigma rules directory found; Sigma engine disabled")
-            return nil
-        }
-        return err
-    }
-    if !info.IsDir() {
-        logger.Warn().
-            Str("rules_dir", rulesDir).
-            Msg("Sigma rules path is not a directory; Sigma engine disabled")
-        return nil
-    }
+	info, err := os.Stat(rulesDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			logger.Info().
+				Str("rules_dir", rulesDir).
+				Msg("no Sigma rules directory found; Sigma engine disabled")
 
-    var rules []sigma.Rule
+			return nil
+		}
 
-    err = filepath.WalkDir(rulesDir, func(path string, d os.DirEntry, walkErr error) error {
-        if walkErr != nil {
-            return walkErr
-        }
-        if d.IsDir() {
-            return nil
-        }
-        if !isYAML(path) {
-            return nil
-        }
+		return err
+	}
+	if !info.IsDir() {
+		logger.Warn().
+			Str("rules_dir", rulesDir).
+			Msg("Sigma rules path is not a directory; Sigma engine disabled")
 
-        contents, readErr := os.ReadFile(path)
-        if readErr != nil {
-            logger.Warn().
-                Err(readErr).
-                Str("file", path).
-                Msg("failed to read Sigma rule file")
-            return nil
-        }
+		return nil
+	}
 
-        fileType := sigma.InferFileType(contents)
-        switch fileType {
-        case sigma.RuleFile:
-            rule, parseErr := sigma.ParseRule(contents)
-            if parseErr != nil {
-                logger.Warn().
-                    Err(parseErr).
-                    Str("file", path).
-                    Msg("failed to parse Sigma rule")
-                return nil
-            }
-            rules = append(rules, rule)
-            logger.Debug().
-                Str("id", rule.ID).
-                Str("title", rule.Title).
-                Str("file", path).
-                Msg("loaded Sigma rule")
-        case sigma.ConfigFile:
-            logger.Debug().
-                Str("file", path).
-                Msg("ignoring Sigma config file (not used yet)")
-        default:
-            logger.Debug().
-                Str("file", path).
-                Msg("unknown Sigma file type, ignoring")
-        }
+	var rules []sigma.Rule
 
-        return nil
-    })
-    if err != nil {
-        return err
-    }
+	err = filepath.WalkDir(rulesDir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if !isYAML(path) {
+			return nil
+		}
 
-    if len(rules) == 0 {
-        logger.Info().
-            Str("rules_dir", rulesDir).
-            Msg("no Sigma rules loaded; Sigma engine disabled")
-        return nil
-    }
+		contents, readErr := os.ReadFile(filepath.Clean(path))
+		if readErr != nil {
+			logger.Warn().
+				Err(readErr).
+				Str("file", path).
+				Msg("failed to read Sigma rule file")
 
-    bundle := sigeval.ForRules(rules)
+			return nil
+		}
 
-    sigmaEngine = &SigmaEngine{
-        bundle: bundle,
-        rules:  rules,
-    }
+		fileType := sigma.InferFileType(contents)
+		switch fileType {
+		case sigma.RuleFile:
+			rule, parseErr := sigma.ParseRule(contents)
+			if parseErr != nil {
+				logger.Warn().
+					Err(parseErr).
+					Str("file", path).
+					Msg("failed to parse Sigma rule")
 
-    logger.Info().
-        Int("rule_count", len(rules)).
-        Msg("Sigma engine initialised")
+				return nil
+			}
+			rules = append(rules, rule)
+			logger.Debug().
+				Str("id", rule.ID).
+				Str("title", rule.Title).
+				Str("file", path).
+				Msg("loaded Sigma rule")
+		case sigma.ConfigFile:
+			logger.Debug().
+				Str("file", path).
+				Msg("ignoring Sigma config file (not used yet)")
+		case sigma.UnknownFile, sigma.InvalidFile:
+			logger.Debug().
+				Str("file", path).
+				Msg("unknown Sigma file type, ignoring")
+		}
 
-    return nil
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	if len(rules) == 0 {
+		logger.Info().
+			Str("rules_dir", rulesDir).
+			Msg("no Sigma rules loaded; Sigma engine disabled")
+
+		return nil
+	}
+
+	bundle := sigeval.ForRules(rules)
+
+	sigmaEngine = &SigmaEngine{
+		bundle: bundle,
+		rules:  rules,
+	}
+
+	logger.Info().
+		Int("rule_count", len(rules)).
+		Msg("Sigma engine initialised")
+
+	return nil
 }
 
 func EvaluateSigmaResult(ctx context.Context, r Result, logger *zerolog.Logger) ([]sigeval.RuleResult, error) {
-    if sigmaEngine == nil {
-        logger.Debug().Msg("Sigma engine not initialised or no rules – skipping evaluation")
-        return nil, nil
-    }
-    if ctx == nil {
-        ctx = context.Background()
-    }
+	if sigmaEngine == nil {
+		logger.Debug().Msg("Sigma engine not initialised or no rules – skipping evaluation")
 
-    event := resultToSigmaEvent(r, logger)
+		return nil, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
-    logger.Debug().
-        Interface("sigma_event", event).
-        Msg("Sigma event (flattened) generated from Result")
+	event := resultToSigmaEvent(r, logger)
 
-    if flat, ok := event.(map[string]any); ok {
-        if title, ok := flat["result.head.title"]; ok {
-            logger.Debug().
-                Interface("result.head.title", title).
-                Msg("Sigma event result.head.title field")
-        }
-    }
+	logger.Debug().
+		Interface("sigma_event", event).
+		Msg("Sigma event (flattened) generated from Result")
 
-    matches, err := sigmaEngine.bundle.Matches(ctx, event)
-    if err != nil {
-        logger.Warn().
-            Err(err).
-            Msg("Sigma evaluation error")
-        return nil, err
-    }
+	if flat, ok := event.(map[string]any); ok {
+		if title, ok := flat["result.head.title"]; ok {
+			logger.Debug().
+				Interface("result.head.title", title).
+				Msg("Sigma event result.head.title field")
+		}
+	}
 
-    if len(matches) == 0 {
-        logger.Debug().Msg("Sigma evaluation produced zero RuleResults")
-        return nil, nil
-    }
+	matches, err := sigmaEngine.bundle.Matches(ctx, event)
+	if err != nil {
+		logger.Warn().
+			Err(err).
+			Msg("Sigma evaluation error")
 
-    for _, m := range matches {
-        logger.Debug().
-            Str("rule_id", m.Rule.ID).
-            Str("rule_title", m.Rule.Title).
-            Bool("match", m.Match).
-            Interface("search_results", m.SearchResults).
-            Interface("condition_results", m.ConditionResults).
-            Msg("Sigma rule evaluation result")
+		return nil, err
+	}
 
-        if m.Match {
-            logger.Warn().
-                Str("rule_id", m.Rule.ID).
-                Str("rule_title", m.Rule.Title).
-                Msg("Sigma rule matched scanner result")
-        }
-    }
+	if len(matches) == 0 {
+		logger.Debug().Msg("Sigma evaluation produced zero RuleResults")
 
-    return matches, nil
+		return nil, nil
+	}
+
+	for _, m := range matches {
+		logger.Debug().
+			Str("rule_id", m.Rule.ID).
+			Str("rule_title", m.Rule.Title).
+			Bool("match", m.Match).
+			Interface("search_results", m.SearchResults).
+			Interface("condition_results", m.ConditionResults).
+			Msg("Sigma rule evaluation result")
+
+		if m.Match {
+			logger.Warn().
+				Str("rule_id", m.Rule.ID).
+				Str("rule_title", m.Rule.Title).
+				Msg("Sigma rule matched scanner result")
+		}
+	}
+
+	return matches, nil
 }
 
 func resultToSigmaEvent(r Result, logger *zerolog.Logger) sigeval.Event {
-    b, err := json.Marshal(r)
-    if err != nil {
-        logger.Warn().Err(err).Msg("failed to marshal Result into JSON for Sigma event")
-        return map[string]any{}
-    }
+	b, err := json.Marshal(r)
+	if err != nil {
+		logger.Warn().Err(err).Msg("failed to marshal Result into JSON for Sigma event")
 
-    logger.Debug().
-        RawJSON("result_json", b).
-        Msg("raw Result JSON before Sigma event mapping")
+		return map[string]any{}
+	}
 
-    var nested map[string]any
-    if err := json.Unmarshal(b, &nested); err != nil {
-        logger.Warn().Err(err).Msg("failed to unmarshal Result JSON into nested map")
-        return map[string]any{}
-    }
+	logger.Debug().
+		RawJSON("result_json", b).
+		Msg("raw Result JSON before Sigma event mapping")
 
-    flat := make(map[string]any)
-    flattenMap("", nested, flat)
-    return flat
+	var nested map[string]any
+	if err := json.Unmarshal(b, &nested); err != nil {
+		logger.Warn().Err(err).Msg("failed to unmarshal Result JSON into nested map")
+
+		return map[string]any{}
+	}
+
+	flat := make(map[string]any)
+	flattenMap("", nested, flat)
+
+	return flat
 }
 
 func flattenMap(prefix string, v any, out map[string]any) {
-    switch val := v.(type) {
-    case map[string]any:
-        for k, inner := range val {
-            key := k
-            if prefix != "" {
-                key = prefix + "." + k
-            }
-            flattenMap(key, inner, out)
-        }
-    case []any:
-        for i, inner := range val {
-            key := prefix + "[" + fmt.Sprint(i) + "]"
-            flattenMap(key, inner, out)
-        }
-    default:
-        if prefix != "" {
-            out[prefix] = val
-        }
-    }
+	switch val := v.(type) {
+	case map[string]any:
+		for k, inner := range val {
+			key := k
+			if prefix != "" {
+				key = prefix + "." + k
+			}
+			flattenMap(key, inner, out)
+		}
+	case []any:
+		for i, inner := range val {
+			key := prefix + "[" + strconv.Itoa(i) + "]"
+			flattenMap(key, inner, out)
+		}
+	default:
+		if prefix != "" {
+			out[prefix] = val
+		}
+	}
 }
 
 func isYAML(path string) bool {
-    lower := strings.ToLower(path)
-    return strings.HasSuffix(lower, ".yml") || strings.HasSuffix(lower, ".yaml")
+	lower := strings.ToLower(path)
+
+	return strings.HasSuffix(lower, ".yml") || strings.HasSuffix(lower, ".yaml")
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/mjc-gh/pisces"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewTask(t *testing.T) {
@@ -170,8 +171,8 @@ func TestPerformTaskUnknownType(t *testing.T) {
 	task := Task{action: "huh", url: "http://example.com"}
 	r := performTask(context.TODO(), &task, pisces.Logger())
 
+	require.Error(t, r.Error)
 	assert.Equal(t, "huh", r.Action)
-	assert.Error(t, r.Error)
 	assert.NotEmpty(t, r.URL)
 	assert.NotEmpty(t, r.Elapsed)
 }

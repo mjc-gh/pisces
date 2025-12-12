@@ -18,6 +18,9 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
+var ErrInvalidDeviceProperties = errors.New("invalid device properties")
+var ErrScreenShotFailed = errors.New("screenshot result error")
+
 var (
 	logger  *zerolog.Logger
 	version string
@@ -74,6 +77,7 @@ func main() {
 					params := map[string]any{
 						"wait": cmd.Int("wait"),
 					}
+
 					return runTask(ctx, cmd, "analyze", params, outputResultJson)
 				},
 			},
@@ -100,7 +104,8 @@ func main() {
 		},
 	}
 
-	if err := cmd.Run(context.Background(), os.Args); err != nil {
+	err := cmd.Run(context.Background(), os.Args)
+	if err != nil {
 		log.Fatal(err)
 	}
 }
@@ -145,12 +150,13 @@ func runTask(ctx context.Context, cmd *cli.Command, name string, params map[stri
 
 func outputResultJson(cmd *cli.Command, e *engine.Engine) error {
 	output := cmd.String("output")
-	out, err := os.Create(output)
+	out, err := os.Create(filepath.Clean(output))
 	if err != nil {
 		return fmt.Errorf("create output file: %w", err)
 	}
 	defer func() {
-		if cerr := out.Close(); cerr != nil {
+		cerr := out.Close()
+		if cerr != nil {
 			logger.Warn().Err(cerr).Msg("file close error")
 		}
 	}()
@@ -173,6 +179,7 @@ func outputResultJson(cmd *cli.Command, e *engine.Engine) error {
 	for r := range e.Results() {
 		if r.Error != nil {
 			logger.Warn().Msgf("result error: %v", r.Error)
+
 			continue
 		}
 
@@ -200,32 +207,38 @@ func outputResultJson(cmd *cli.Command, e *engine.Engine) error {
 		line, err := json.Marshal(r.Result)
 		if err != nil {
 			logger.Warn().Err(err).Msg("result JSON marshal error")
+
 			continue
 		}
 		if _, err = out.Write(line); err != nil {
 			logger.Warn().Err(err).Msg("result JSON write error")
+
 			continue
 		}
-		if _, err = out.Write([]byte("\n")); err != nil {
+		if _, err = out.WriteString("\n"); err != nil {
 			logger.Warn().Err(err).Msg("result JSON newline write error")
+
 			continue
 		}
 		logger.Debug().Msgf("wrote to file %s", output)
 	}
 
 	logger.Info().Msg("done")
+
 	return nil
 }
 
 func screenshotCallback(cmd *cli.Command, e *engine.Engine) error {
 	outputDir := cmd.String("output-dir")
-	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+	err := os.MkdirAll(outputDir, 0o750)
+	if err != nil {
 		return fmt.Errorf("create output dir: %w", err)
 	}
 
 	for r := range e.Results() {
 		if r.Error != nil {
 			logger.Warn().Msgf("result error: %v", r.Error)
+
 			continue
 		}
 
@@ -236,7 +249,7 @@ func screenshotCallback(cmd *cli.Command, e *engine.Engine) error {
 
 		sr, ok := r.Result.(*engine.ScreenshotResult)
 		if !ok {
-			return errors.New("screenshot result error: unexpected type")
+			return ErrScreenShotFailed
 		}
 
 		fileName, err := urlToFilename(r.URL)
@@ -244,14 +257,16 @@ func screenshotCallback(cmd *cli.Command, e *engine.Engine) error {
 			return fmt.Errorf("build screenshot filename: %w", err)
 		}
 
-		outPath := filepath.Join(outputDir, fmt.Sprintf("%s.png", fileName))
-		out, err := os.Create(outPath)
+		outPath := filepath.Join(outputDir, fileName+".png")
+		out, err := os.Create(filepath.Clean(outPath))
 		if err != nil {
 			return fmt.Errorf("create screenshot file: %w", err)
 		}
 
 		if _, err = out.Write(*sr.Buffer); err != nil {
-			out.Close()
+			// Try to close file, but ignore any errors
+			_ = out.Close()
+
 			return fmt.Errorf("write screenshot file: %w", err)
 		}
 		if err := out.Close(); err != nil {
@@ -264,15 +279,17 @@ func screenshotCallback(cmd *cli.Command, e *engine.Engine) error {
 
 func validDeviceType(ctx context.Context, cmd *cli.Command, v string) error {
 	if !browser.IsValidDeviceType(v) {
-		return fmt.Errorf("invalid device type: %v", v)
+		return fmt.Errorf("%w: %v", ErrInvalidDeviceProperties, v)
 	}
+
 	return nil
 }
 
 func validDeviceSize(ctx context.Context, cmd *cli.Command, v string) error {
 	if !browser.IsValidDeviceSize(v) {
-		return fmt.Errorf("invalid device size: %v", v)
+		return fmt.Errorf("%w: %v", ErrInvalidDeviceProperties, v)
 	}
+
 	return nil
 }
 

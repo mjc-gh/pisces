@@ -9,6 +9,7 @@ import (
 	"github.com/mjc-gh/pisces"
 	"github.com/mjc-gh/pisces/internal/piscestest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func matchAsset(fileName string) func(*Asset) bool {
@@ -18,8 +19,6 @@ func matchAsset(fileName string) func(*Asset) bool {
 }
 
 func TestCrawlerVisit(t *testing.T) {
-	t.Parallel()
-
 	pctx, cancel := piscestest.NewTestContext()
 	defer cancel()
 
@@ -28,7 +27,7 @@ func TestCrawlerVisit(t *testing.T) {
 	crawler := NewCrawler("pisces", 1920, 1080)
 
 	err := crawler.Visit(ctx, server.URL, pisces.Logger())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	visit := crawler.LastVisit()
 	assert.NotNil(t, visit)

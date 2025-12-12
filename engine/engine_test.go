@@ -105,7 +105,6 @@ func TestNew(t *testing.T) {
 		assert.NotNil(t, engine.logger)
 	})
 
-
 	t.Run("channels have correct buffer sizes", func(t *testing.T) {
 		concurrency := 10
 		engine := New(concurrency)

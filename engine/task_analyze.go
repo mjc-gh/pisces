@@ -66,7 +66,7 @@ func performAnalyzeTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 
 	visit := crawler.LastVisit()
 	if visit == nil {
-		return AnalyzeResult{}, errors.New("no visit from crawler")
+		return AnalyzeResult{}, ErrNoCrawlerVisit
 	}
 
 	result := AnalyzeResult{Visit: visit}
@@ -74,7 +74,7 @@ func performAnalyzeTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 
 	wait := int64(task.IntParam("wait", 50))
 
-	if err = extractVisibleText(ctx, wait, &result); err != nil {
+	if err = extractVisibleText(ctx, &result); err != nil {
 		logger.Warn().Msgf("visible text error: %v", err)
 	}
 
@@ -97,13 +97,14 @@ func performAnalyzeTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 	return result, nil
 }
 
-func extractVisibleText(ctx context.Context, wait int64, result *AnalyzeResult) error {
+func extractVisibleText(ctx context.Context, result *AnalyzeResult) error {
 	visibleText, err := evaluateAsString(ctx, "js/visible_text.js")
 	if err != nil {
 		return err
 	}
 
 	result.VisibleText = visibleText
+
 	return nil
 }
 
@@ -119,11 +120,7 @@ func runFormAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) err
 
 		result.Forms = make([]Form, 0, len(formNodes))
 
-		formNodeAttrs, err := attributesFromNodes(ctx, formNodes, []string{"action", "method", "class", "id"})
-		if err != nil {
-			return err
-		}
-
+		formNodeAttrs := attributesFromNodes(ctx, formNodes, []string{"action", "method", "class", "id"})
 		for idx, formNode := range formNodes {
 			var inputNodes []*cdp.Node
 			if err := queryWithDeadline(ctx, wait, func(ctx context.Context) error {
@@ -141,11 +138,7 @@ func runFormAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) err
 				Inputs: make([]Input, len(inputNodes)),
 			}
 
-			inputNodeAttrs, err := attributesFromNodes(ctx, inputNodes, []string{"name", "type", "value"})
-			if err != nil {
-				return err
-			}
-
+			inputNodeAttrs := attributesFromNodes(ctx, inputNodes, []string{"name", "type", "value"})
 			for jdx, inputAttrs := range inputNodeAttrs {
 				form.Inputs[jdx].Name = inputAttrs[0]
 				form.Inputs[jdx].Type = inputAttrs[1]
@@ -171,11 +164,7 @@ func runLinkAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) err
 
 		result.Links = make([]Link, 0, len(anchorNodes))
 
-		anchorNodeAttrs, err := attributesFromNodes(ctx, anchorNodes, []string{"href", "class"})
-		if err != nil {
-			return err
-		}
-
+		anchorNodeAttrs := attributesFromNodes(ctx, anchorNodes, []string{"href", "class"})
 		for idx, anchorNode := range anchorNodes {
 			anchorAttrs := anchorNodeAttrs[idx]
 			if anchorAttrs[0] == "" {
@@ -184,7 +173,8 @@ func runLinkAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) err
 
 			link := Link{Href: anchorAttrs[0], Class: anchorAttrs[1]}
 
-			if err := chromedp.Run(ctx, chromedp.TextContent(anchorNode.FullXPath(), &link.Text, chromedp.BySearch)); err != nil {
+			err := chromedp.Run(ctx, chromedp.TextContent(anchorNode.FullXPath(), &link.Text, chromedp.BySearch))
+			if err != nil {
 				return err
 			}
 
@@ -199,9 +189,10 @@ func runHeadAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) err
 	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		var children []*cdp.Node
 
-		if err := queryWithDeadline(ctx, wait, func(ctx context.Context) error {
+		err := queryWithDeadline(ctx, wait, func(ctx context.Context) error {
 			return chromedp.Nodes("head > *", &children, chromedp.ByQueryAll).Do(ctx)
-		}); err != nil {
+		})
+		if err != nil {
 			return err
 		}
 
@@ -210,11 +201,12 @@ func runHeadAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) err
 			case "LINK":
 				var rel, href string
 
-				if err := chromedp.Run(
+				err := chromedp.Run(
 					ctx,
 					chromedp.JavascriptAttribute(child.FullXPath(), "rel", &rel, chromedp.BySearch),
 					chromedp.JavascriptAttribute(child.FullXPath(), "href", &href, chromedp.BySearch),
-				); err != nil {
+				)
+				if err != nil {
 					return err
 				}
 
@@ -227,11 +219,12 @@ func runHeadAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) err
 			case "META":
 				var name, content string
 
-				if err := chromedp.Run(
+				err := chromedp.Run(
 					ctx,
 					chromedp.JavascriptAttribute(child.FullXPath(), "name", &name, chromedp.BySearch),
 					chromedp.JavascriptAttribute(child.FullXPath(), "content", &content, chromedp.BySearch),
-				); err != nil {
+				)
+				if err != nil {
 					return err
 				}
 
@@ -242,7 +235,8 @@ func runHeadAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) err
 					result.Head.Viewport = content
 				}
 			case "TITLE":
-				if err := chromedp.Run(ctx, chromedp.TextContent(child.FullXPath(), &result.Head.Title, chromedp.BySearch)); err != nil {
+				err := chromedp.Run(ctx, chromedp.TextContent(child.FullXPath(), &result.Head.Title, chromedp.BySearch))
+				if err != nil {
 					return err
 				}
 			}
@@ -253,7 +247,8 @@ func runHeadAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) err
 }
 
 func runInteractions(ctx context.Context, wait int64, result *AnalyzeResult, logger *zerolog.Logger) error {
-	if err := runClipboardInteractions(ctx, wait, result, logger); err != nil {
+	err := runClipboardInteractions(ctx, wait, result, logger)
+	if err != nil {
 		return err
 	}
 
@@ -291,18 +286,19 @@ func runClipboardInteractions(ctx context.Context, wait int64, result *AnalyzeRe
 	// Enumerate all nodes and click them; see if anything was added to the clipboard
 	var allNodes []*cdp.Node
 
-	//var allNodesSelector = "body *:not(script, style, a[href], a[href] *, button *)"
+	// var allNodesSelector = "body *:not(script, style, a[href], a[href] *, button *)"
 	// Find all leaf nodes that aren't part of links
 	var allNodesSelector = "body *:not(:has(*)):not(script, style, a[href], a[href] *, option, svg *)"
 
 	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		if err := queryWithDeadline(ctx, wait, func(ctx context.Context) error {
+		err := queryWithDeadline(ctx, wait, func(ctx context.Context) error {
 			return chromedp.Nodes(
 				allNodesSelector,
 				&allNodes,
 				chromedp.ByQueryAll,
 			).Do(ctx)
-		}); err != nil {
+		})
+		if err != nil {
 			return err
 		}
 
@@ -317,7 +313,7 @@ func runClipboardInteractions(ctx context.Context, wait int64, result *AnalyzeRe
 	for _, node := range allNodes {
 		var clipboardText string
 
-		if err := queryWithDeadline(ctx, 20, func(ctx context.Context) error {
+		err := queryWithDeadline(ctx, wait, func(ctx context.Context) error {
 			return chromedp.Run(
 				ctx,
 				chromedp.Click(node.FullXPath(), chromedp.BySearch),
@@ -325,7 +321,8 @@ func runClipboardInteractions(ctx context.Context, wait int64, result *AnalyzeRe
 					return p.WithAwaitPromise(true)
 				}),
 			)
-		}); err != nil {
+		})
+		if err != nil {
 			return err
 		}
 
@@ -349,13 +346,14 @@ func setupNavigationLock(ctx context.Context, logger *zerolog.Logger) error {
 	}
 
 	// Listen for JavaScript onbeforeunload dialog and cancel navigation
-	chromedp.ListenTarget(ctx, func(ev interface{}) {
+	chromedp.ListenTarget(ctx, func(ev any) {
 		if ev, ok := ev.(*page.EventJavascriptDialogOpening); ok {
 			l := logger.With().Str("type", string(ev.Type)).Logger()
 			l.Debug().Msgf("dialog opening")
 
 			if ev.Type != page.DialogTypeBeforeunload {
 				l.Warn().Msgf("unexpected dialog blocking evaluation: %s", ev.Message)
+
 				return
 			}
 
@@ -373,7 +371,7 @@ func setupNavigationLock(ctx context.Context, logger *zerolog.Logger) error {
 	return nil
 }
 
-// Evaluate JS snippets from the jsFS as a string
+// Evaluate JS snippets from the jsFS as a string.
 func evaluateAsString(ctx context.Context, jsPath string) (string, error) {
 	var result string
 
@@ -394,14 +392,14 @@ func queryWithDeadline(ctx context.Context, wait int64, callback func(context.Co
 	defer queryCancel()
 
 	err := callback(queryCtx)
-	if err == context.DeadlineExceeded {
+	if errors.Is(err, context.DeadlineExceeded) {
 		return nil
 	}
 
 	return err
 }
 
-func attributesFromNodes(ctx context.Context, nodes []*cdp.Node, attributes []string) ([][]string, error) {
+func attributesFromNodes(ctx context.Context, nodes []*cdp.Node, attributes []string) [][]string {
 	values := make([][]string, len(nodes))
 
 	for i, node := range nodes {
@@ -423,5 +421,5 @@ func attributesFromNodes(ctx context.Context, nodes []*cdp.Node, attributes []st
 		}
 	}
 
-	return values, nil
+	return values
 }
