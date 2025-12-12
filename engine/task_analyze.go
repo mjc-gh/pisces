@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/chromedp/cdproto/browser"
@@ -12,6 +13,7 @@ import (
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/rs/zerolog"
+	"golang.org/x/net/html"
 )
 
 //go:embed js/*.js
@@ -21,6 +23,7 @@ type AnalyzeResult struct {
 	ClipboardTexts []string `json:"clipboard_texts"`
 	Forms          []Form   `json:"forms"`
 	Head           Head     `json:"head"`
+	InitialTitle   string   `json:"initial_title"`
 	Links          []Link   `json:"links"`
 	VisibleText    string   `json:"visible_text"`
 	*Visit
@@ -70,6 +73,7 @@ func performAnalyzeTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 	}
 
 	result := AnalyzeResult{Visit: visit}
+	result.InitialTitle = titleFromHTML(result.InitialBody, 100)
 	result.Head = Head{}
 
 	wait := int64(task.IntParam("wait", 50))
@@ -422,4 +426,49 @@ func attributesFromNodes(ctx context.Context, nodes []*cdp.Node, attributes []st
 	}
 
 	return values
+}
+
+func titleFromHTML(htmlStr string, maxNodes int) string {
+	if maxNodes <= 0 {
+		maxNodes = 100
+	}
+
+	doc, err := html.Parse(strings.NewReader(htmlStr))
+	if err != nil {
+		return ""
+	}
+
+	var (
+		nodeCount int
+		traverse  func(*html.Node) string
+	)
+
+	traverse = func(n *html.Node) string {
+		if nodeCount >= maxNodes {
+			return ""
+		}
+		nodeCount++
+
+		if n.Type == html.ElementNode && n.Data == "title" {
+			for p := n.Parent; p != nil; p = p.Parent {
+				if p.Type == html.ElementNode && p.Data == "head" {
+					if n.FirstChild != nil && n.FirstChild.Type == html.TextNode {
+						return n.FirstChild.Data
+					}
+
+					return ""
+				}
+			}
+		}
+
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			if title := traverse(c); title != "" {
+				return title
+			}
+		}
+
+		return ""
+	}
+
+	return traverse(doc)
 }
