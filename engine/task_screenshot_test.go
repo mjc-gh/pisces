@@ -6,6 +6,7 @@ import (
 	"github.com/mjc-gh/pisces"
 	"github.com/mjc-gh/pisces/internal/piscestest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPerformScreenshotTask(t *testing.T) {
@@ -19,6 +20,6 @@ func TestPerformScreenshotTask(t *testing.T) {
 
 	sr, err := performScreenshotTask(ctx, &task, pisces.Logger())
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotEmpty(t, sr.Buffer)
 }

@@ -38,9 +38,6 @@ linters:
         rules:
           json: snake
           yaml: camel
-    testifylint:
-      disable:
-        - require-error
     revive:
       rules:
         - name: exported
