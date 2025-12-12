@@ -11,13 +11,20 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
-    services:
-      chromedp:
-        image: docker.io/chromedp/headless-shell:latest
-        ports:
-          - 9222:9222
-
     steps:
+    - name: Start headless Chrome
+      run: |
+        docker run -d \
+          --name chromedp \
+          -p 9222:9222 \
+          chromedp/headless-shell:latest \
+          /headless-shell/headless-shell \
+          --no-sandbox \
+          --disable-gpu \
+          --disable-dev-shm-usage \
+          --remote-debugging-address=0.0.0.0 \
+          --remote-debugging-port=9222
+
     - uses: actions/checkout@v4
 
     - name: Set up Go

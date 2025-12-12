@@ -19,8 +19,6 @@ func matchAsset(fileName string) func(*Asset) bool {
 }
 
 func TestCrawlerVisit(t *testing.T) {
-	t.Parallel()
-
 	pctx, cancel := piscestest.NewTestContext()
 	defer cancel()
 

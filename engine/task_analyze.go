@@ -312,9 +312,8 @@ func runClipboardInteractions(ctx context.Context, wait int64, result *AnalyzeRe
 	cc := NewClipboardCapture()
 	for _, node := range allNodes {
 		var clipboardText string
-		var halfWait = float64(wait) * 0.5
 
-		err := queryWithDeadline(ctx, int64(halfWait), func(ctx context.Context) error {
+		err := queryWithDeadline(ctx, wait, func(ctx context.Context) error {
 			return chromedp.Run(
 				ctx,
 				chromedp.Click(node.FullXPath(), chromedp.BySearch),
