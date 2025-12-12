@@ -3,9 +3,9 @@ package engine
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	sigma "github.com/bradleyjkemp/sigma-go"
@@ -27,14 +27,17 @@ func InitSigmaEngine(rulesDir string, logger *zerolog.Logger) error {
 			logger.Info().
 				Str("rules_dir", rulesDir).
 				Msg("no Sigma rules directory found; Sigma engine disabled")
+
 			return nil
 		}
+
 		return err
 	}
 	if !info.IsDir() {
 		logger.Warn().
 			Str("rules_dir", rulesDir).
 			Msg("Sigma rules path is not a directory; Sigma engine disabled")
+
 		return nil
 	}
 
@@ -51,12 +54,13 @@ func InitSigmaEngine(rulesDir string, logger *zerolog.Logger) error {
 			return nil
 		}
 
-		contents, readErr := os.ReadFile(path)
+		contents, readErr := os.ReadFile(filepath.Clean(path))
 		if readErr != nil {
 			logger.Warn().
 				Err(readErr).
 				Str("file", path).
 				Msg("failed to read Sigma rule file")
+
 			return nil
 		}
 
@@ -69,6 +73,7 @@ func InitSigmaEngine(rulesDir string, logger *zerolog.Logger) error {
 					Err(parseErr).
 					Str("file", path).
 					Msg("failed to parse Sigma rule")
+
 				return nil
 			}
 			rules = append(rules, rule)
@@ -81,7 +86,7 @@ func InitSigmaEngine(rulesDir string, logger *zerolog.Logger) error {
 			logger.Debug().
 				Str("file", path).
 				Msg("ignoring Sigma config file (not used yet)")
-		default:
+		case sigma.UnknownFile, sigma.InvalidFile:
 			logger.Debug().
 				Str("file", path).
 				Msg("unknown Sigma file type, ignoring")
@@ -97,6 +102,7 @@ func InitSigmaEngine(rulesDir string, logger *zerolog.Logger) error {
 		logger.Info().
 			Str("rules_dir", rulesDir).
 			Msg("no Sigma rules loaded; Sigma engine disabled")
+
 		return nil
 	}
 
@@ -117,6 +123,7 @@ func InitSigmaEngine(rulesDir string, logger *zerolog.Logger) error {
 func EvaluateSigmaResult(ctx context.Context, r Result, logger *zerolog.Logger) ([]sigeval.RuleResult, error) {
 	if sigmaEngine == nil {
 		logger.Debug().Msg("Sigma engine not initialised or no rules – skipping evaluation")
+
 		return nil, nil
 	}
 	if ctx == nil {
@@ -142,11 +149,13 @@ func EvaluateSigmaResult(ctx context.Context, r Result, logger *zerolog.Logger) 
 		logger.Warn().
 			Err(err).
 			Msg("Sigma evaluation error")
+
 		return nil, err
 	}
 
 	if len(matches) == 0 {
 		logger.Debug().Msg("Sigma evaluation produced zero RuleResults")
+
 		return nil, nil
 	}
 
@@ -174,6 +183,7 @@ func resultToSigmaEvent(r Result, logger *zerolog.Logger) sigeval.Event {
 	b, err := json.Marshal(r)
 	if err != nil {
 		logger.Warn().Err(err).Msg("failed to marshal Result into JSON for Sigma event")
+
 		return map[string]any{}
 	}
 
@@ -184,11 +194,13 @@ func resultToSigmaEvent(r Result, logger *zerolog.Logger) sigeval.Event {
 	var nested map[string]any
 	if err := json.Unmarshal(b, &nested); err != nil {
 		logger.Warn().Err(err).Msg("failed to unmarshal Result JSON into nested map")
+
 		return map[string]any{}
 	}
 
 	flat := make(map[string]any)
 	flattenMap("", nested, flat)
+
 	return flat
 }
 
@@ -204,7 +216,7 @@ func flattenMap(prefix string, v any, out map[string]any) {
 		}
 	case []any:
 		for i, inner := range val {
-			key := prefix + "[" + fmt.Sprint(i) + "]"
+			key := prefix + "[" + strconv.Itoa(i) + "]"
 			flattenMap(key, inner, out)
 		}
 	default:
@@ -216,5 +228,6 @@ func flattenMap(prefix string, v any, out map[string]any) {
 
 func isYAML(path string) bool {
 	lower := strings.ToLower(path)
+
 	return strings.HasSuffix(lower, ".yml") || strings.HasSuffix(lower, ".yaml")
 }

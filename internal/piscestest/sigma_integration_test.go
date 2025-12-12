@@ -26,7 +26,8 @@ func TestSigmaRuleMatchesTestSite(t *testing.T) {
 	pkgDir := filepath.Dir(thisFile)
 	rulesDir := filepath.Join(pkgDir, "testdata", "rules")
 
-	if err := engine.InitSigmaEngine(rulesDir, logger); err != nil {
+	err := engine.InitSigmaEngine(rulesDir, logger)
+	if err != nil {
 		t.Fatalf("InitSigmaEngine failed: %v", err)
 	}
 

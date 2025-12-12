@@ -71,6 +71,7 @@ func (c *Crawler) Visit(ctx context.Context, url string, logger *zerolog.Logger)
 		case *network.EventRequestWillBeSent:
 			if ev.Initiator == nil {
 				logger.Warn().Msg("crawler has nil initiator in EventRequestWillBeSent")
+
 				return
 			}
 
@@ -88,6 +89,8 @@ func (c *Crawler) Visit(ctx context.Context, url string, logger *zerolog.Logger)
 						switch location := val.(type) {
 						case string:
 							visit.RedirectLocations = append(visit.RedirectLocations, Redirect{status, location})
+						default:
+							logger.Debug().Msgf("redirect location capture unexpected type: %v", val)
 						}
 					}
 				}
@@ -108,7 +111,6 @@ func (c *Crawler) Visit(ctx context.Context, url string, logger *zerolog.Logger)
 				asset.CertificateInfo = getCertInfo(secDetails)
 				asset.ResponseHeaders = ev.Response.Headers
 				asset.ResponseStatus = ev.Response.Status
-
 			} else if mainReqID == ev.RequestID {
 				visit.CertificateInfo = getCertInfo(secDetails)
 			}
@@ -117,6 +119,7 @@ func (c *Crawler) Visit(ctx context.Context, url string, logger *zerolog.Logger)
 				go getResponseBody(ctx, ev.RequestID, func(body []byte, err error) {
 					if err != nil {
 						logger.Warn().Msgf("crawler getResponseBody main request error: %s", err)
+
 						return
 					}
 
@@ -128,6 +131,7 @@ func (c *Crawler) Visit(ctx context.Context, url string, logger *zerolog.Logger)
 				go getResponseBody(ctx, ev.RequestID, func(body []byte, err error) {
 					if err != nil {
 						logger.Warn().Msgf("crawler getResponseBody error: %s", err)
+
 						return
 					}
 
@@ -139,14 +143,15 @@ func (c *Crawler) Visit(ctx context.Context, url string, logger *zerolog.Logger)
 
 	visitSteps := []chromedp.Action{
 		network.Enable(),
-		chromedp.EmulateViewport(int64(c.winWidth), int64(c.winHeight)),
+		chromedp.EmulateViewport(c.winWidth, c.winHeight),
 		emulation.SetUserAgentOverride(c.userAgent),
 		chromedp.Navigate(url),
 		chromedp.Location(&visit.Location),
 		chromedp.OuterHTML("html", &visit.Body),
 	}
 
-	if err := chromedp.Run(ctx, visitSteps...); err != nil {
+	err := chromedp.Run(ctx, visitSteps...)
+	if err != nil {
 		return err
 	}
 
@@ -174,14 +179,18 @@ func getResponseBody(ctx context.Context, reqID network.RequestID, callback func
 	var body []byte
 
 	// ActionFunc to bind body and handle error
-	fn := func(ctx context.Context) (err error) {
+	fn := func(ctx context.Context) error {
+		var err error
+
 		body, err = network.GetResponseBody(reqID).Do(ctx)
+
 		return err
 	}
 
 	err := chromedp.Run(ctx, chromedp.ActionFunc(fn))
 	if err != nil {
 		callback(body, err)
+
 		return
 	}
 

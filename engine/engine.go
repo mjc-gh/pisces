@@ -3,7 +3,9 @@ package engine
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/mjc-gh/pisces/internal/browser"
@@ -29,7 +31,8 @@ type Option func(*Engine)
 
 func WithRemoteAllocator(host string, port int) Option {
 	return func(e *Engine) {
-		e.config.remoteURL = fmt.Sprintf("http://%s:%d/json/version", host, port)
+		host := net.JoinHostPort(host, strconv.Itoa(port))
+		e.config.remoteURL = fmt.Sprintf("http://%s/json/version", host)
 	}
 }
 
@@ -78,7 +81,7 @@ func (e *Engine) Start(ctx context.Context) {
 		ctx, e.browserCancel = browser.StartLocal(ctx, e.config.headfull)
 	}
 
-	for i := 0; i < e.config.concurrency; i++ {
+	for i := range e.config.concurrency {
 		e.wg.Add(1)
 
 		go func(idx int, tasks <-chan Task, results chan<- Result, done func(), logger *zerolog.Logger) {

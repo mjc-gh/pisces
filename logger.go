@@ -35,12 +35,14 @@ func SetupLogger(debug bool) *zerolog.Logger {
 		)
 
 	logger = &l
+
 	return logger
 }
 
 func Logger() *zerolog.Logger {
 	if logger == nil {
 		nop := zerolog.Nop()
+
 		return &nop
 	}
 

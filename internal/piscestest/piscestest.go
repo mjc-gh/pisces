@@ -38,9 +38,11 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	file, err := testFS.Open(fullPath)
 	if err != nil {
 		http.Error(w, "File not found", http.StatusNotFound)
+
 		return
 	} else if _, err := file.Stat(); errors.Is(err, os.ErrNotExist) {
 		http.Error(w, "File not found", http.StatusNotFound)
+
 		return
 	}
 
@@ -55,5 +57,6 @@ func NewTestContext() (context.Context, context.CancelFunc) {
 	}
 
 	_, useHeadfull := os.LookupEnv("PISCES_HEADFULL")
+
 	return browser.StartLocal(ctx, useHeadfull)
 }

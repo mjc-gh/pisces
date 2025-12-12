@@ -1,0 +1,47 @@
+version: "2"
+linters:
+  default: all
+  disable:
+    # TODO: Get these linters enabled
+    - contextcheck
+    - gochecknoglobals
+    - godox
+    - ireturn
+    - tparallel
+    - paralleltest
+
+    # These are disabled for now, primarily out of author preference
+    - cyclop
+    - depguard
+    - embeddedstructfieldcheck
+    - exhaustruct
+    - funlen
+    - lll
+    - gocognit
+    - mnd
+    - noinlineerr
+    - testpackage
+    - varnamelen
+    - wrapcheck
+    - wsl
+    - wsl_v5
+
+  exclusions:
+    rules:
+      - path: engine/crawler.go
+        linters:
+          - nestif
+
+  settings:
+    tagliatelle:
+      case:
+        rules:
+          json: snake
+          yaml: camel
+    testifylint:
+      disable:
+        - require-error
+    revive:
+      rules:
+        - name: exported
+          disabled: true

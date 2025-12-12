@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -25,9 +26,7 @@ type TaskOption func(*Task)
 
 func WithParams(m map[string]any) TaskOption {
 	return func(t *Task) {
-		for k, v := range m {
-			t.params[k] = v
-		}
+		maps.Copy(t.params, m)
 	}
 }
 
@@ -47,7 +46,7 @@ func NewTask(action, input string, opts ...TaskOption) Task {
 	url := input
 
 	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-		url = fmt.Sprintf("http://%s", url)
+		url = "http://" + url
 	}
 
 	t := Task{
@@ -66,7 +65,7 @@ func NewTask(action, input string, opts ...TaskOption) Task {
 	return t
 }
 
-// Get int parameter from task params
+// IntParam will get a task parameter with the given key as an int value.
 func (t Task) IntParam(key string, defaultVal int) int {
 	val, ok := t.params[key]
 	if !ok {
@@ -107,7 +106,7 @@ func (r *Result) PrettyJSON() ([]byte, error) {
 	return json.MarshalIndent(r, "", "\t")
 }
 
-type Payload interface{}
+type Payload any
 
 func performTask(ctx context.Context, task *Task, logger *zerolog.Logger) Result {
 	logger.Debug().Msgf("perform task: %+v", task)
@@ -147,7 +146,7 @@ func performTask(ctx context.Context, task *Task, logger *zerolog.Logger) Result
 
 	default:
 		// Unknown task -- shouldn't happen in practice
-		return newErrorResult(task, fmt.Errorf("unknown action: %s", task.action))
+		return newErrorResult(task, fmt.Errorf("%w: %s", ErrUnknownAction, task.action))
 	}
 
 	result.Elapsed = time.Since(task.received)
