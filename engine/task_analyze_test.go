@@ -13,6 +13,7 @@ func TestPerformAnalyzeTask(t *testing.T) {
 
 	server := piscestest.NewTestWebServer("simple")
 	task := NewTask("analyze", server.URL)
+	task.params = map[string]any{"wait": 100}
 
 	ctx, cancel := piscestest.NewTestContext()
 	defer cancel()
