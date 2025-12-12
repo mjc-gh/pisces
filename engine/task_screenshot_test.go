@@ -10,8 +10,6 @@ import (
 )
 
 func TestPerformScreenshotTask(t *testing.T) {
-	t.Parallel()
-
 	server := piscestest.NewTestWebServer("simple")
 	task := NewTask("screenshot", server.URL)
 

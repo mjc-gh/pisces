@@ -10,8 +10,6 @@ import (
 )
 
 func TestPerformAnalyzeTask(t *testing.T) {
-	t.Parallel()
-
 	server := piscestest.NewTestWebServer("simple")
 	task := NewTask("analyze", server.URL)
 	task.params = map[string]any{"wait": 100}
@@ -27,8 +25,6 @@ func TestPerformAnalyzeTask(t *testing.T) {
 }
 
 func TestPerformAnalyzeTaskWithClipboardInteractions(t *testing.T) {
-	t.Parallel()
-
 	server := piscestest.NewTestWebServer("fakecaptcha")
 	task := NewTask("analyze", server.URL)
 
