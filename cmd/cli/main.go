@@ -251,7 +251,9 @@ func screenshotCallback(cmd *cli.Command, e *engine.Engine) error {
 		}
 
 		if _, err = out.Write(*sr.Buffer); err != nil {
-			out.Close()
+			// Try to close file, but ignore any errors
+			_ = out.Close()
+
 			return fmt.Errorf("write screenshot file: %w", err)
 		}
 		if err := out.Close(); err != nil {
