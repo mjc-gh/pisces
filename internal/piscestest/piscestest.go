@@ -50,7 +50,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func NewTestContext() (context.Context, context.CancelFunc) {
-	ctx := context.TODO()
+	ctx := context.Background()
 	remoteUrl, useRemote := os.LookupEnv("PISCES_CHROMEDP_REMOTE_URL")
 	if useRemote {
 		return browser.StartRemote(ctx, remoteUrl)
