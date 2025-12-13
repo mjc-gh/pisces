@@ -4,13 +4,16 @@ import (
 	"context"
 	"embed"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/runtime"
+	"github.com/chromedp/cdproto/storage"
 	"github.com/chromedp/chromedp"
 	"github.com/rs/zerolog"
 	"golang.org/x/net/html"
@@ -21,12 +24,27 @@ var jsFS embed.FS
 
 type AnalyzeResult struct {
 	ClipboardTexts []string `json:"clipboard_texts"`
+	Cookies        []Cookie `json:"cookies"`
+	CookiePairs    []string `json:"cookie_pairs"`
 	Forms          []Form   `json:"forms"`
 	Head           Head     `json:"head"`
 	InitialTitle   string   `json:"initial_title"`
 	Links          []Link   `json:"links"`
 	VisibleText    string   `json:"visible_text"`
 	*Visit
+}
+
+type Cookie struct {
+	Name      string    `json:"name"`
+	Value     string    `json:"value"`
+	Domain    string    `json:"domain"`
+	Path      string    `json:"path"`
+	ExpiresAt time.Time `json:"expires_at,omitzero"`
+	Expires   float64   `json:"expires"`
+	HTTPOnly  bool      `json:"http_only"`
+	Secure    bool      `json:"secure"`
+	Session   bool      `json:"session"`
+	SameSite  string    `json:"same_site,omitempty"`
 }
 
 type Input struct {
@@ -92,6 +110,10 @@ func performAnalyzeTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 
 	if err = runHeadAnalysis(ctx, wait, &result); err != nil {
 		logger.Warn().Msgf("head analysis error: %v", err)
+	}
+
+	if err = runCookieAnalysis(ctx, &result); err != nil {
+		logger.Warn().Msgf("cookie analysis error: %v", err)
 	}
 
 	if err = runInteractions(ctx, wait, &result, logger); err != nil {
@@ -188,7 +210,6 @@ func runLinkAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) err
 		return nil
 	}))
 }
-
 func runHeadAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) error {
 	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		var children []*cdp.Node
@@ -248,6 +269,50 @@ func runHeadAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) err
 
 		return nil
 	}))
+}
+
+func runCookieAnalysis(ctx context.Context, result *AnalyzeResult) error {
+	var cookies []*network.Cookie
+
+	if err := chromedp.Run(ctx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var err error
+
+			if cookies, err = storage.GetCookies().Do(ctx); err != nil {
+				return err
+			}
+
+			return nil
+		}),
+	); err != nil {
+		return err
+	}
+
+	// Print the cookies
+	result.Cookies = make([]Cookie, len(cookies))
+	result.CookiePairs = make([]string, len(cookies))
+
+	for idx, cookie := range cookies {
+		result.Cookies[idx] = Cookie{
+			Name:     cookie.Name,
+			Value:    cookie.Value,
+			Domain:   cookie.Domain,
+			Path:     cookie.Path,
+			HTTPOnly: cookie.HTTPOnly,
+			Secure:   cookie.Secure,
+			Session:  cookie.Session,
+			SameSite: string(cookie.SameSite),
+		}
+
+		if cookie.Expires != -1 {
+			result.Cookies[idx].Expires = cookie.Expires
+			result.Cookies[idx].ExpiresAt = time.Unix(int64(cookie.Expires), 0)
+		}
+
+		result.CookiePairs[idx] = fmt.Sprintf("%s=%s", cookie.Name, cookie.Value)
+	}
+
+	return nil
 }
 
 func runInteractions(ctx context.Context, wait int64, result *AnalyzeResult, logger *zerolog.Logger) error {
