@@ -16,11 +16,25 @@ import (
 var testFS embed.FS
 
 type handler struct {
-	dir string
+	cookies []http.Cookie
+	dir     string
 }
 
-func NewTestWebServer(dir string) *httptest.Server {
-	server := httptest.NewServer(handler{dir})
+type TestWebServerOption func(*handler)
+
+func WithSetCookie(cookie http.Cookie) TestWebServerOption {
+	return func(h *handler) {
+		h.cookies = append(h.cookies, cookie)
+	}
+}
+
+func NewTestWebServer(dir string, opts ...TestWebServerOption) *httptest.Server {
+	h := handler{make([]http.Cookie, 0), dir}
+	for _, opt := range opts {
+		opt(&h)
+	}
+
+	server := httptest.NewServer(h)
 
 	return server
 }
@@ -44,6 +58,10 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "File not found", http.StatusNotFound)
 
 		return
+	}
+
+	for _, cookie := range h.cookies {
+		http.SetCookie(w, &cookie)
 	}
 
 	http.ServeFileFS(w, r, testFS, fullPath)
