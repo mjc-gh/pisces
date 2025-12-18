@@ -48,9 +48,13 @@ type Cookie struct {
 }
 
 type Input struct {
-	Name  string `json:"name"`
-	Type  string `json:"type"`
-	Value string `json:"value"`
+	Class       string `json:"class,omitempty"`
+	ID          string `json:"id,omitempty"`
+	Label       string `json:"label,omitempty"`
+	Placeholder string `json:"placeholder,omitempty"`
+	Name        string `json:"name,omitempty"`
+	Type        string `json:"type,omitempty"`
+	Value       string `json:"value,omitempty"`
 }
 
 type Form struct {
@@ -100,7 +104,7 @@ func performAnalyzeTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 		logger.Warn().Msgf("visible text error: %v", err)
 	}
 
-	if err = runFormAnalysis(ctx, wait, &result); err != nil {
+	if err = runFormAnalysis(ctx, wait, &result, logger); err != nil {
 		logger.Warn().Msgf("form analysis error: %v", err)
 	}
 
@@ -134,9 +138,10 @@ func extractVisibleText(ctx context.Context, result *AnalyzeResult) error {
 	return nil
 }
 
-func runFormAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) error {
+func runFormAnalysis(ctx context.Context, wait int64, result *AnalyzeResult, logger *zerolog.Logger) error {
 	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		var formNodes []*cdp.Node
+		var labelNodes []*cdp.Node
 
 		if err := queryWithDeadline(ctx, wait, func(ctx context.Context) error {
 			return chromedp.Nodes("form", &formNodes, chromedp.ByQueryAll).Do(ctx)
@@ -144,13 +149,26 @@ func runFormAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) err
 			return err
 		}
 
+		if err := queryWithDeadline(ctx, wait, func(ctx context.Context) error {
+			return chromedp.Nodes("label", &labelNodes, chromedp.ByQueryAll).Do(ctx)
+		}); err != nil {
+			return err
+		}
+
+		// Map label nodes by ID
+		labelsByID := make(map[string]*cdp.Node, len(labelNodes))
+		for _, label := range labelNodes {
+			labelsByID[label.AttributeValue("for")] = label
+		}
+
 		result.Forms = make([]Form, 0, len(formNodes))
 
 		formNodeAttrs := attributesFromNodes(ctx, formNodes, []string{"action", "method", "class", "id"})
 		for idx, formNode := range formNodes {
 			var inputNodes []*cdp.Node
+
 			if err := queryWithDeadline(ctx, wait, func(ctx context.Context) error {
-				return chromedp.Nodes("input, textarea, select", &inputNodes, chromedp.FromNode(formNode)).Do(ctx)
+				return chromedp.Nodes("input, textarea, select", &inputNodes, chromedp.ByQueryAll, chromedp.FromNode(formNode)).Do(ctx)
 			}); err != nil {
 				return err
 			}
@@ -158,17 +176,26 @@ func runFormAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) err
 			formAttrs := formNodeAttrs[idx]
 			form := Form{
 				Action: formAttrs[0],
-				Method: formAttrs[1],
+				Method: strings.ToUpper(formAttrs[1]),
 				Class:  formAttrs[2],
 				ID:     formAttrs[3],
 				Inputs: make([]Input, len(inputNodes)),
 			}
 
-			inputNodeAttrs := attributesFromNodes(ctx, inputNodes, []string{"name", "type", "value"})
+			inputNodeAttrs := attributesFromNodes(ctx, inputNodes, []string{"class", "id", "placeholder", "name", "type", "value"})
 			for jdx, inputAttrs := range inputNodeAttrs {
-				form.Inputs[jdx].Name = inputAttrs[0]
-				form.Inputs[jdx].Type = inputAttrs[1]
-				form.Inputs[jdx].Value = inputAttrs[2]
+				id := inputAttrs[1]
+
+				form.Inputs[jdx].Class = inputAttrs[0]
+				form.Inputs[jdx].ID = id
+				form.Inputs[jdx].Placeholder = strings.TrimSpace(inputAttrs[2])
+				form.Inputs[jdx].Name = inputAttrs[3]
+				form.Inputs[jdx].Type = inputAttrs[4]
+				form.Inputs[jdx].Value = inputAttrs[5]
+
+				if inputAttrs[4] != "hidden" {
+					form.Inputs[jdx].Label = findLabelTextForInput(ctx, labelsByID[id], inputNodes[jdx], logger)
+				}
 			}
 
 			result.Forms = append(result.Forms, form)
@@ -491,6 +518,46 @@ func attributesFromNodes(ctx context.Context, nodes []*cdp.Node, attributes []st
 	}
 
 	return values
+}
+
+// Try to find label text. First, we'll look for a label node whose
+// `for` attribute is equal to the `id` attribute of the input. Next,
+// we'll check if the input has a label parent. If so, we'll take the
+// text content of that parent.
+func findLabelTextForInput(ctx context.Context, labelNode *cdp.Node, inputNode *cdp.Node, logger *zerolog.Logger) string {
+	inputLog := logger.With().Str("input", inputNode.FullXPath()).Logger()
+
+	if labelNode == nil {
+		labelNode = findParentByTagName("LABEL", inputNode)
+	}
+
+	if labelNode == nil {
+		inputLog.Debug().Msg("no label node found")
+
+		return ""
+	}
+
+	var label string
+	if err := chromedp.Run(ctx, chromedp.TextContent(labelNode.FullXPath(), &label, chromedp.BySearch)); err != nil {
+		logger.Warn().Msgf("form label error: %v", err)
+	}
+
+	return strings.TrimSpace(label)
+}
+
+func findParentByTagName(name string, node *cdp.Node) *cdp.Node {
+	for {
+		parent := node.Parent
+		if parent == nil {
+			return nil
+		}
+
+		if parent.NodeName == name {
+			return parent
+		}
+
+		node = parent
+	}
 }
 
 func titleFromHTML(htmlStr string, maxNodes int) string {

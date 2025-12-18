@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"log"
 	"net/http"
 	"slices"
 	"testing"
@@ -49,8 +48,6 @@ func TestPerformAnalyzeTaskWithCookeis(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, ar.CookiePairs, "http_cookie=delightful")
 	assert.Contains(t, ar.CookiePairs, "js_cookie=delicious")
-
-	log.Printf("%v\n", ar.Cookies)
 
 	byCookieName := func(name string) func(Cookie) bool {
 		return func(c Cookie) bool {
@@ -113,4 +110,59 @@ func TestPerformAnalyzeTaskWithClipboardInteractions(t *testing.T) {
 	assert.Equal(t, []string{
 		"msiexec /i https://totally.legit/captcha",
 	}, ar.ClipboardTexts)
+}
+
+func TestPerformAnalyzeTaskWithForms(t *testing.T) {
+	server := piscestest.NewTestWebServer("forms")
+	task := NewTask("analyze", server.URL)
+	task.params = map[string]any{"wait": 100}
+
+	ctx, cancel := piscestest.NewTestContext()
+	defer cancel()
+
+	ar, err := performAnalyzeTask(ctx, &task, pisces.Logger())
+
+	require.NoError(t, err)
+
+	searchIdx := slices.IndexFunc(ar.Forms, piscestest.FindByID[Form]("search-form"))
+	search := ar.Forms[searchIdx]
+
+	assert.Equal(t, "GET", search.Method)
+	assert.Equal(t, server.URL+"/", search.Action)
+	assert.Equal(t, "inline-form", search.Class)
+	assert.Len(t, search.Inputs, 1)
+	assert.Equal(t, "thin", search.Inputs[0].Class)
+	assert.Equal(t, "search", search.Inputs[0].ID)
+	assert.Equal(t, "Search:", search.Inputs[0].Label)
+	assert.Equal(t, "Enter keyword...", search.Inputs[0].Placeholder)
+	assert.Equal(t, "q", search.Inputs[0].Name)
+	assert.Equal(t, "search", search.Inputs[0].Type)
+	assert.Empty(t, search.Inputs[0].Value)
+
+	loginIdx := slices.IndexFunc(ar.Forms, piscestest.FindByID[Form]("login-form"))
+	login := ar.Forms[loginIdx]
+
+	assert.Equal(t, "POST", login.Method)
+	assert.Equal(t, server.URL+"/login", login.Action)
+	assert.Equal(t, "block-form", login.Class)
+	assert.Len(t, login.Inputs, 4)
+
+	emailInputIdx := slices.IndexFunc(login.Inputs, piscestest.FindByID[Input]("email"))
+	emailInput := login.Inputs[emailInputIdx]
+
+	require.NotNil(t, emailInput)
+	assert.Equal(t, "Email", emailInput.Label)
+
+	passwdInputIdx := slices.IndexFunc(login.Inputs, piscestest.FindByID[Input]("password"))
+	passwdInput := login.Inputs[passwdInputIdx]
+
+	require.NotNil(t, passwdInput)
+	assert.Equal(t, "Password", passwdInput.Label)
+
+	hiddenInputIdx := slices.IndexFunc(login.Inputs, piscestest.FindByID[Input]("xsrf"))
+	hiddenInput := login.Inputs[hiddenInputIdx]
+
+	require.NotNil(t, hiddenInput)
+	assert.Empty(t, hiddenInput.Label)
+	assert.Equal(t, "1234", hiddenInput.Value)
 }

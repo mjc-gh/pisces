@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Forms Example</title>
+  </head>
+  <body>
+    <form class="inline-form" id="search-form">
+      <label for="search">Search:</label>
+      <input name="q" class="thin" type="search" placeholder="Enter keyword..." id="search" />
+      <button type="submit">Search</button>
+    </form>
+
+    <form method="post" class="block-form" action="login" id="login-form">
+      <label>
+        Email
+        <div class="field"><input type="text" name="email" id="email" /></div>
+      </label>
+      <label>
+        <em>Password</em>
+        <div class="field"><input type="password" name="password" id="password" /></div>
+        <input type="hidden" id="xsrf" name="xsrf" value="1234" />
+      </label>
+      <input type="submit" value="Login" />
+    </form>
+  </body>
+</html>
