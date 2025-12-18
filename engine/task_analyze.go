@@ -192,7 +192,10 @@ func runFormAnalysis(ctx context.Context, wait int64, result *AnalyzeResult, log
 				form.Inputs[jdx].Name = inputAttrs[3]
 				form.Inputs[jdx].Type = inputAttrs[4]
 				form.Inputs[jdx].Value = inputAttrs[5]
-				form.Inputs[jdx].Label = findLabelTextForInput(ctx, labelsByID[id], inputNodes[jdx], logger)
+
+				if inputAttrs[4] != "hidden" {
+					form.Inputs[jdx].Label = findLabelTextForInput(ctx, labelsByID[id], inputNodes[jdx], logger)
+				}
 			}
 
 			result.Forms = append(result.Forms, form)

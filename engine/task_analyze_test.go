@@ -158,4 +158,11 @@ func TestPerformAnalyzeTaskWithForms(t *testing.T) {
 
 	require.NotNil(t, passwdInput)
 	assert.Equal(t, "Password", passwdInput.Label)
+
+	hiddenInputIdx := slices.IndexFunc(login.Inputs, piscestest.FindByID[Input]("xsrf"))
+	hiddenInput := login.Inputs[hiddenInputIdx]
+
+	require.NotNil(t, hiddenInput)
+	assert.Empty(t, hiddenInput.Label)
+	assert.Equal(t, "1234", hiddenInput.Value)
 }

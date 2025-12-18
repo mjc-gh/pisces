@@ -11,7 +11,6 @@
     </form>
 
     <form method="post" class="block-form" action="login" id="login-form">
-      <input type="hidden" name="xsrf" value="1234" />
       <label>
         Email
         <div class="field"><input type="text" name="email" id="email" /></div>
@@ -19,6 +18,7 @@
       <label>
         <em>Password</em>
         <div class="field"><input type="password" name="password" id="password" /></div>
+        <input type="hidden" id="xsrf" name="xsrf" value="1234" />
       </label>
       <input type="submit" value="Login" />
     </form>
