@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 
 	"github.com/mjc-gh/pisces/internal/browser"
 )
@@ -77,4 +78,17 @@ func NewTestContext() (context.Context, context.CancelFunc) {
 	_, useHeadfull := os.LookupEnv("PISCES_HEADFULL")
 
 	return browser.StartLocal(ctx, useHeadfull)
+}
+
+func FindByID[T any](id string) func(T) bool {
+	return func(item T) bool {
+		v := reflect.ValueOf(item)
+		if v.Kind() == reflect.Struct {
+			if f := v.FieldByName("ID"); f.IsValid() && f.Kind() == reflect.String {
+				return f.String() == id
+			}
+		}
+
+		return false
+	}
 }
