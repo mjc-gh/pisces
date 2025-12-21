@@ -58,6 +58,10 @@ func main() {
 		&cli.IntFlag{Name: "wait", Value: 300, Aliases: []string{"w"}, Usage: "wait time (seconds) after load before analysis"},
 	}, withOutputFlags...)
 
+	analyzeFlags := append([]cli.Flag{
+		&cli.BoolFlag{Name: "no-clipboard", Usage: "disable clipboard interactions"},
+	}, withWaitFlags...)
+
 	ver := version
 	if ver == "" {
 		ver = "0.0.0"
@@ -66,26 +70,29 @@ func main() {
 	cmd := &cli.Command{
 		Name:    "pisces",
 		Version: ver,
-		Usage:   "A tool for analyzing phishing sites",
+		Usage:   "A tool for analyzing phishing sites.",
 		Commands: []*cli.Command{
 			{
-				Name:      "analyze",
-				Usage:     "Analyze and interact one or more URLs for phishing",
-				Arguments: baseArgs,
-				Flags:     withWaitFlags,
+				Name:        "analyze",
+				Usage:       "Analyze one or more URLs for phishing",
+				Description: "In addition to capturing requests, this task extracts cookies, links, forms, and inputs from the page. This task can optionally run simga detection rules. The task will also interact with the page:\n - Click elements looking for event handlers that copy to the clipboard.",
+				Arguments:   baseArgs,
+				Flags:       analyzeFlags,
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					params := map[string]any{
-						"wait": cmd.Int("wait"),
+						"clipboard": !cmd.Bool("no-clipboard"),
+						"wait":      cmd.Int("wait"),
 					}
 
 					return runTask(ctx, cmd, "analyze", params, outputResultJson)
 				},
 			},
 			{
-				Name:      "collect",
-				Usage:     "Collect HTML and assets for one or more URLs",
-				Arguments: baseArgs,
-				Flags:     withOutputFlags,
+				Name:        "collect",
+				Usage:       "Collect HTML and assets for one or more URLs",
+				Description: "This task will capture all assets included by the page. Request and response headers as well as full response bodies are included in the results. This task can optionally run sigma detection rules.",
+				Arguments:   baseArgs,
+				Flags:       withOutputFlags,
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					return runTask(ctx, cmd, "collect", map[string]any{}, outputResultJson)
 				},
