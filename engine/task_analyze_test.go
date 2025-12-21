@@ -25,6 +25,11 @@ func TestPerformAnalyzeTask(t *testing.T) {
 	assert.Equal(t, "A Simple Web Page", ar.InitialTitle)
 	assert.Equal(t, "A Simple Web Page", ar.Head.Title)
 	assert.Equal(t, "Simple Page Hello world!", ar.VisibleText)
+	assert.Equal(t, []string{}, ar.ClipboardTexts)
+	assert.Equal(t, []Cookie{}, ar.Cookies)
+	assert.Equal(t, []string{}, ar.CookiePairs)
+	assert.Equal(t, []Form{}, ar.Forms)
+	assert.Equal(t, []Link{}, ar.Links)
 }
 
 func TestPerformAnalyzeTaskWithCookeis(t *testing.T) {
@@ -94,6 +99,20 @@ func TestPerformAnalyzeTaskWithTitleChange(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Initial Title", ar.InitialTitle)
 	assert.Equal(t, "Set by JS", ar.Head.Title)
+}
+
+func TestPerformAnalyzeTaskWithClipboardInteractionsWithClipboardParamFalse(t *testing.T) {
+	server := piscestest.NewTestWebServer("fakecaptcha")
+	task := NewTask("analyze", server.URL)
+	task.params = map[string]any{"clipboard": false}
+
+	ctx, cancel := piscestest.NewTestContext()
+	defer cancel()
+
+	ar, err := performAnalyzeTask(ctx, &task, pisces.Logger())
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{}, ar.ClipboardTexts)
 }
 
 func TestPerformAnalyzeTaskWithClipboardInteractions(t *testing.T) {

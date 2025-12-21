@@ -96,9 +96,16 @@ func performAnalyzeTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 
 	result := AnalyzeResult{Visit: visit}
 	result.InitialTitle = titleFromHTML(result.InitialBody, 100)
+
+	result.ClipboardTexts = []string{}
+	result.Cookies = []Cookie{}
+	result.CookiePairs = []string{}
+	result.Forms = []Form{}
 	result.Head = Head{}
+	result.Links = []Link{}
 
 	wait := int64(task.IntParam("wait", 50))
+	doClipboardInteraction := task.BoolParam("clipboard", true)
 
 	if err = extractVisibleText(ctx, &result); err != nil {
 		logger.Warn().Msgf("visible text error: %v", err)
@@ -120,8 +127,10 @@ func performAnalyzeTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 		logger.Warn().Msgf("cookie analysis error: %v", err)
 	}
 
-	if err = runInteractions(ctx, wait, &result, logger); err != nil {
-		logger.Warn().Msgf("interaction error: %v", err)
+	if doClipboardInteraction {
+		if err = runClipboardInteractions(ctx, wait, &result, logger); err != nil {
+			logger.Warn().Msgf("clipboard interaction error: %v", err)
+		}
 	}
 
 	return result, nil
@@ -337,15 +346,6 @@ func runCookieAnalysis(ctx context.Context, result *AnalyzeResult) error {
 		}
 
 		result.CookiePairs[idx] = fmt.Sprintf("%s=%s", cookie.Name, cookie.Value)
-	}
-
-	return nil
-}
-
-func runInteractions(ctx context.Context, wait int64, result *AnalyzeResult, logger *zerolog.Logger) error {
-	err := runClipboardInteractions(ctx, wait, result, logger)
-	if err != nil {
-		return err
 	}
 
 	return nil

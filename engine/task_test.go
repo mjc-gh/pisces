@@ -111,6 +111,53 @@ func TestNewTask(t *testing.T) {
 	}
 }
 
+func TestTaskBoolParam(t *testing.T) {
+	tests := []struct {
+		name        string
+		params      map[string]any
+		key         string
+		defaultVal  bool
+		expectedVal bool
+	}{
+		{
+			name:        "existing bool parameter",
+			params:      map[string]any{"enabled": false},
+			key:         "enabled",
+			defaultVal:  true,
+			expectedVal: false,
+		},
+		{
+			name:        "missing parameter returns default",
+			params:      map[string]any{},
+			key:         "enabled",
+			defaultVal:  true,
+			expectedVal: true,
+		},
+		{
+			name:        "zero value bool parameter",
+			params:      map[string]any{"enabled": false},
+			key:         "enabled",
+			defaultVal:  true,
+			expectedVal: false,
+		},
+		{
+			name:        "non-bool parameter returns default",
+			params:      map[string]any{"timeout": "30"},
+			key:         "timeout",
+			defaultVal:  true,
+			expectedVal: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			task := NewTask("test", "http://example.com", WithParams(tt.params))
+			result := task.BoolParam(tt.key, tt.defaultVal)
+			assert.Equal(t, tt.expectedVal, result)
+		})
+	}
+}
+
 func TestTaskIntParam(t *testing.T) {
 	tests := []struct {
 		name        string

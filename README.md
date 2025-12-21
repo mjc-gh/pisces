@@ -47,7 +47,7 @@ VERSION:
    0.0.3
 
 COMMANDS:
-   analyze     Analyze and interact one or more URLs for phishing
+   analyze     Analyze one or more URLs for phishing
    collect     Collect HTML and assets for one or more URLs
    screenshot  Screenshot one or more URLs
    help, h     Shows a list of commands or help for one command
@@ -74,7 +74,7 @@ All commands accept the following flags:
    --help, -h                  show help
 ```
 
-See command-specific help for output flags.
+See command-specific help for output and additional task specific flags.
 
 The `--remote` flag will use a `RemoteAllocator`. It's primarily used
 with the [`chromedp` headless shell

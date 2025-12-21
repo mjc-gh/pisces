@@ -80,6 +80,20 @@ func (t Task) IntParam(key string, defaultVal int) int {
 	return n
 }
 
+func (t Task) BoolParam(key string, defaultVal bool) bool {
+	val, ok := t.params[key]
+	if !ok {
+		return defaultVal
+	}
+
+	n, ok := val.(bool)
+	if !ok {
+		return defaultVal
+	}
+
+	return n
+}
+
 type Result struct {
 	Action  string        `json:"action"`
 	Elapsed time.Duration `json:"elapsed"`
