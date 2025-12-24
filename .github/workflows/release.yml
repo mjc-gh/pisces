@@ -37,6 +37,14 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate release notes
+        run: ./scripts/release_notes.sh > ${{ github.workspace }}_RELEASE_NOTES.txt
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -53,14 +61,6 @@ jobs:
           tar -czvf pisces-linux-arm64.tar.gz artifacts/pisces-linux-arm64/pisces
           zip -r pisces-win-amd64.zip artifacts/pisces-windows-amd64/pisces
           zip -r pisces-win-arm64.zip artifacts/pisces-windows-arm64/pisces
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Generate release notes
-        run: ./scripts/release_notes.sh > ${{ github.workspace }}_RELEASE_NOTES.txt
 
       - name: Release
         uses: softprops/action-gh-release@v1
