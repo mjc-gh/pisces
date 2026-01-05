@@ -1,0 +1,16 @@
+title: Microsoft Favicon on Non-Microsoft Domain
+id: pisces-microsoft-favicon-phishing-001
+status: experimental
+description: Detects phishing sites using Microsoft favicon hash on non-Microsoft domains
+author: HuskyHacks
+
+logsource:
+  product: pisces
+  service: scanner
+
+detection:
+  selection:
+    result.head.favicon_hash: "632312815"
+  filter:
+    result.location|re: "(?i)(microsoft|live|outlook|office|microsoftonline|msauth)\\.com"
+  condition: selection and not filter

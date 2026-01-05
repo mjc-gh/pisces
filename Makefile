@@ -31,6 +31,7 @@ test.docker:
 run.docker:
 	docker build -t pisces . && \
 	docker run --rm -it \
+		--network host \
 		-v "$$PWD":/app \
 		-w /app \
 		pisces $(ARGS)

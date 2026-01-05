@@ -15,6 +15,7 @@ import (
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/cdproto/storage"
 	"github.com/chromedp/chromedp"
+	"github.com/mjc-gh/pisces/internal/favicon"
 	"github.com/rs/zerolog"
 	"golang.org/x/net/html"
 )
@@ -75,6 +76,7 @@ type Head struct {
 	Title           string `json:"title"`
 	Description     string `json:"description"`
 	FaviconUrl      string `json:"favicon_url"`
+	FaviconHash     string `json:"favicon_hash,omitempty"`
 	ShortcutIconUrl string `json:"shortcut_icon_url"`
 	Viewport        string `json:"viewport"`
 }
@@ -121,6 +123,10 @@ func performAnalyzeTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 
 	if err = runHeadAnalysis(ctx, wait, &result); err != nil {
 		logger.Warn().Msgf("head analysis error: %v", err)
+	}
+
+	if err = runFaviconHashAnalysis(ctx, &result, logger); err != nil {
+		logger.Warn().Msgf("favicon hash analysis error: %v", err)
 	}
 
 	if err = runCookieAnalysis(ctx, &result); err != nil {
@@ -305,6 +311,40 @@ func runHeadAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) err
 
 		return nil
 	}))
+}
+
+func runFaviconHashAnalysis(ctx context.Context, result *AnalyzeResult, logger *zerolog.Logger) error {
+
+	faviconURL := result.Head.FaviconUrl
+	if faviconURL == "" {
+		faviconURL = result.Head.ShortcutIconUrl
+	}
+
+	if faviconURL == "" {
+		extractedURL, err := favicon.ExtractFaviconURL(ctx, result.Location)
+		if err != nil {
+			logger.Debug().Msgf("failed to extract favicon URL: %v", err)
+			return nil
+		}
+		faviconURL = extractedURL
+
+		if result.Head.FaviconUrl == "" {
+			result.Head.FaviconUrl = faviconURL
+		}
+	}
+
+	if faviconURL != "" {
+		hash, err := favicon.CalculateHash(faviconURL)
+		if err != nil {
+			logger.Debug().Msgf("failed to calculate favicon hash for %s: %v", faviconURL, err)
+			return nil
+		}
+
+		result.Head.FaviconHash = hash
+		logger.Debug().Msgf("calculated favicon hash: %s for %s", hash, faviconURL)
+	}
+
+	return nil
 }
 
 func runCookieAnalysis(ctx context.Context, result *AnalyzeResult) error {
