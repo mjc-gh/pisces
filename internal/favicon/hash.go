@@ -4,15 +4,16 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"math/bits"
-	"net/http"
 	"regexp"
+	"time"
 
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 )
 
-// MurmurHash3 implements the 32-bit MurmurHash3 algorithm: https://en.wikipedia.org/wiki/MurmurHash
+// MurmurHash3 implements the 32-bit MurmurHash3 algorithm
+// This is compatible with Shodan's favicon hash calculation
 func MurmurHash3(data []byte) int32 {
 	const (
 		c1 uint32 = 0xcc9e2d51
@@ -86,34 +87,60 @@ func addNewlines(s string, n int) string {
 	return result
 }
 
-// CalculateHash fetches a favicon from the given URL and calculates its Shodan-compatible hash
-func CalculateHash(faviconURL string) (string, error) {
+// FetchFaviconWithBrowser fetches the favicon using the chromedp browser context
+// This respects all browser flags including SSL error ignoring
+func FetchFaviconWithBrowser(ctx context.Context, faviconURL string) ([]byte, error) {
 	if faviconURL == "" {
-		return "", fmt.Errorf("empty favicon URL")
+		return nil, fmt.Errorf("empty favicon URL")
 	}
 
-	// Create HTTP client with timeout
-	client := &http.Client{
-		Timeout: 10 * 1000000000, // 10 seconds
-	}
+	var base64Data string
 
-	resp, err := client.Get(faviconURL)
+	// Use chromedp to fetch the favicon as base64 data
+	// This JavaScript fetches the image and converts it to base64
+	err := chromedp.Run(ctx,
+		chromedp.Evaluate(fmt.Sprintf(`
+			(async function() {
+				try {
+					const response = await fetch('%s');
+					if (!response.ok) {
+						throw new Error('HTTP ' + response.status);
+					}
+					const blob = await response.blob();
+					return new Promise((resolve, reject) => {
+						const reader = new FileReader();
+						reader.onloadend = () => {
+							// Remove the data:image/...;base64, prefix
+							const base64 = reader.result.split(',')[1];
+							resolve(base64);
+						};
+						reader.onerror = reject;
+						reader.readAsDataURL(blob);
+					});
+				} catch (e) {
+					throw new Error('Failed to fetch favicon: ' + e.message);
+				}
+			})()
+		`, faviconURL), &base64Data, func(p *runtime.EvaluateParams) *runtime.EvaluateParams {
+			return p.WithAwaitPromise(true)
+		}),
+	)
+
 	if err != nil {
-		return "", fmt.Errorf("failed to fetch favicon: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("favicon fetch returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("failed to fetch favicon with browser: %w", err)
 	}
 
-	// Read favicon data
-	faviconData, err := io.ReadAll(resp.Body)
+	// Decode the base64 data back to bytes
+	faviconData, err := base64.StdEncoding.DecodeString(base64Data)
 	if err != nil {
-		return "", fmt.Errorf("failed to read favicon data: %w", err)
+		return nil, fmt.Errorf("failed to decode base64 favicon data: %w", err)
 	}
 
-	// Calculate hash using Shodan's method:
+	return faviconData, nil
+}
+
+// CalculateHashFromBytes calculates the Shodan-compatible hash from favicon bytes
+func CalculateHashFromBytes(faviconData []byte) string {
 	// 1. Base64 encode the favicon
 	b64 := base64.StdEncoding.EncodeToString(faviconData)
 
@@ -123,7 +150,24 @@ func CalculateHash(faviconURL string) (string, error) {
 	// 3. Calculate mmh3 hash
 	hash := MurmurHash3([]byte(b64WithNewlines))
 
-	return fmt.Sprintf("%d", hash), nil
+	return fmt.Sprintf("%d", hash)
+}
+
+// CalculateHashWithBrowser fetches a favicon using the browser and calculates its hash
+// This automatically respects all browser settings including SSL error ignoring
+func CalculateHashWithBrowser(ctx context.Context, faviconURL string) (string, error) {
+	// Create a timeout context for the fetch operation
+	fetchCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	// Fetch the favicon using the browser (respects SSL settings)
+	faviconData, err := FetchFaviconWithBrowser(fetchCtx, faviconURL)
+	if err != nil {
+		return "", err
+	}
+
+	// Calculate and return the hash
+	return CalculateHashFromBytes(faviconData), nil
 }
 
 // ExtractFaviconURL extracts the favicon URL from the current page

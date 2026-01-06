@@ -76,7 +76,7 @@ type Head struct {
 	Title           string `json:"title"`
 	Description     string `json:"description"`
 	FaviconUrl      string `json:"favicon_url"`
-	FaviconHash     string `json:"favicon_hash,omitempty"`
+	FaviconHash     string `json:"favicon_hash"`
 	ShortcutIconUrl string `json:"shortcut_icon_url"`
 	Viewport        string `json:"viewport"`
 }
@@ -314,30 +314,34 @@ func runHeadAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) err
 }
 
 func runFaviconHashAnalysis(ctx context.Context, result *AnalyzeResult, logger *zerolog.Logger) error {
-
+	// Determine which favicon URL to use
 	faviconURL := result.Head.FaviconUrl
 	if faviconURL == "" {
 		faviconURL = result.Head.ShortcutIconUrl
 	}
 
+	// If still no URL found, try to extract from page
 	if faviconURL == "" {
 		extractedURL, err := favicon.ExtractFaviconURL(ctx, result.Location)
 		if err != nil {
 			logger.Debug().Msgf("failed to extract favicon URL: %v", err)
-			return nil
+			return nil // Don't fail the entire analysis
 		}
 		faviconURL = extractedURL
 
+		// Update the result with the found URL
 		if result.Head.FaviconUrl == "" {
 			result.Head.FaviconUrl = faviconURL
 		}
 	}
 
+	// Calculate the favicon hash using the browser context
+	// This automatically respects all browser flags including SSL error ignoring
 	if faviconURL != "" {
-		hash, err := favicon.CalculateHash(faviconURL)
+		hash, err := favicon.CalculateHashWithBrowser(ctx, faviconURL)
 		if err != nil {
 			logger.Debug().Msgf("failed to calculate favicon hash for %s: %v", faviconURL, err)
-			return nil
+			return nil // Don't fail the entire analysis
 		}
 
 		result.Head.FaviconHash = hash
