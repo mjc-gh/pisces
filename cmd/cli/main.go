@@ -28,6 +28,16 @@ var (
 
 type taskCallbackFn = func(*cli.Command, *engine.Engine) error
 
+// TODO: better integrate this in with the JSON logging, unify the logging/printing outputs
+func printSigmaHit(ruleID, title, hitURL string) {
+	const red = "\x1b[1;31m"
+	const reset = "\x1b[0m"
+
+	fmt.Fprintf(os.Stdout, "\n%s[+] SIGMA ALERT%s rule_id=%s title=%q url=%s\n\n",
+		red, reset, ruleID, title, hitURL,
+	)
+}
+
 func main() {
 	baseArgs := []cli.Argument{
 		&cli.StringArgs{Name: "url", Min: 1, Max: -1},
@@ -203,6 +213,10 @@ func outputResultJson(cmd *cli.Command, e *engine.Engine) error {
 					Str("title", m.Rule.Title).
 					Str("url", r.URL).
 					Msg("[+] SIGMA ALERT: rule matched for URL")
+
+				// TODO: see note about unifying logging outputs
+				printSigmaHit(m.Rule.ID, m.Rule.Title, r.URL)
+
 			}
 		}
 

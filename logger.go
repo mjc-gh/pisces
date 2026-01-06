@@ -10,7 +10,9 @@ import (
 var logger *zerolog.Logger
 
 func SetupLogger(debug bool) *zerolog.Logger {
+
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+
 	if debug {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}

@@ -9,8 +9,10 @@ logsource:
   service: scanner
 
 detection:
-  selection:
-    result.head.favicon_hash: "632312815"
-  filter:
-    result.location|re: "(?i)(microsoft|live|outlook|office|microsoftonline|msauth)\\.com"
-  condition: selection and not filter
+  selection_favicon:
+    result.head.favicon_hash: "512369523"
+
+  selection_microsoft_domain:
+    result.requested_url|re: '(?i)(^|[./@-])(microsoft|live|outlook|office|microsoftonline|msauth)\.com([/:]|$)'
+
+  condition: selection_favicon and not selection_microsoft_domain
