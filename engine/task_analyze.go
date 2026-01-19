@@ -5,6 +5,8 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"log"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,14 +25,15 @@ import (
 var jsFS embed.FS
 
 type AnalyzeResult struct {
-	ClipboardTexts []string `json:"clipboard_texts"`
-	Cookies        []Cookie `json:"cookies"`
-	CookiePairs    []string `json:"cookie_pairs"`
-	Forms          []Form   `json:"forms"`
-	Head           Head     `json:"head"`
-	InitialTitle   string   `json:"initial_title"`
-	Links          []Link   `json:"links"`
-	VisibleText    string   `json:"visible_text"`
+	ClipboardTexts  []string         `json:"clipboard_texts"`
+	Cookies         []Cookie         `json:"cookies"`
+	CookiePairs     []string         `json:"cookie_pairs"`
+	Forms           []Form           `json:"forms"`
+	FormSubmissions []FormSubmission `json:"form_submissions"`
+	Head            Head             `json:"head"`
+	InitialTitle    string           `json:"initial_title"`
+	Links           []Link           `json:"links"`
+	VisibleText     string           `json:"visible_text"`
 	*Visit
 }
 
@@ -55,6 +58,7 @@ type Input struct {
 	Name        string `json:"name,omitempty"`
 	Type        string `json:"type,omitempty"`
 	Value       string `json:"value,omitempty"`
+	xpath       string
 }
 
 type Form struct {
@@ -63,6 +67,12 @@ type Form struct {
 	Class  string  `json:"class"`
 	ID     string  `json:"id"`
 	Inputs []Input `json:"fields"`
+	xpath  string
+}
+
+type FormSubmission struct {
+	Method string `json:"method"`
+	*Visit
 }
 
 type Link struct {
@@ -84,6 +94,8 @@ func performAnalyzeTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 	defer cancel()
 
 	crawler := NewCrawler(task.userAgent, int64(task.winWidth), int64(task.winHeight))
+	crawler.SetupListeners(ctx, logger)
+
 	err := crawler.Visit(ctx, task.url, logger)
 	if err != nil {
 		return AnalyzeResult{}, err
@@ -105,14 +117,12 @@ func performAnalyzeTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 	result.Links = []Link{}
 
 	wait := int64(task.IntParam("wait", 50))
+	maxFormSubmits := task.IntParam("max-form-submits", 1)
 	doClipboardInteraction := task.BoolParam("clipboard", true)
+	doFormInteraction := task.BoolParam("forms", true)
 
 	if err = extractVisibleText(ctx, &result); err != nil {
 		logger.Warn().Msgf("visible text error: %v", err)
-	}
-
-	if err = runFormAnalysis(ctx, wait, &result, logger); err != nil {
-		logger.Warn().Msgf("form analysis error: %v", err)
 	}
 
 	if err = runLinkAnalysis(ctx, wait, &result); err != nil {
@@ -127,9 +137,19 @@ func performAnalyzeTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 		logger.Warn().Msgf("cookie analysis error: %v", err)
 	}
 
+	if err = runInitialFormScan(ctx, wait, &result, logger); err != nil {
+		logger.Warn().Msgf("initial form scan error: %v", err)
+	}
+
 	if doClipboardInteraction {
 		if err = runClipboardInteractions(ctx, wait, &result, logger); err != nil {
 			logger.Warn().Msgf("clipboard interaction error: %v", err)
+		}
+	}
+
+	if doFormInteraction {
+		if err := runFormInteractions(ctx, wait, maxFormSubmits, &crawler, &result, logger); err != nil {
+			logger.Warn().Msgf("form interaction error: %v", err)
 		}
 	}
 
@@ -145,73 +165,6 @@ func extractVisibleText(ctx context.Context, result *AnalyzeResult) error {
 	result.VisibleText = visibleText
 
 	return nil
-}
-
-func runFormAnalysis(ctx context.Context, wait int64, result *AnalyzeResult, logger *zerolog.Logger) error {
-	return chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
-		var formNodes []*cdp.Node
-		var labelNodes []*cdp.Node
-
-		if err := queryWithDeadline(ctx, wait, func(ctx context.Context) error {
-			return chromedp.Nodes("form", &formNodes, chromedp.ByQueryAll).Do(ctx)
-		}); err != nil {
-			return err
-		}
-
-		if err := queryWithDeadline(ctx, wait, func(ctx context.Context) error {
-			return chromedp.Nodes("label", &labelNodes, chromedp.ByQueryAll).Do(ctx)
-		}); err != nil {
-			return err
-		}
-
-		// Map label nodes by ID
-		labelsByID := make(map[string]*cdp.Node, len(labelNodes))
-		for _, label := range labelNodes {
-			labelsByID[label.AttributeValue("for")] = label
-		}
-
-		result.Forms = make([]Form, 0, len(formNodes))
-
-		formNodeAttrs := attributesFromNodes(ctx, formNodes, []string{"action", "method", "class", "id"})
-		for idx, formNode := range formNodes {
-			var inputNodes []*cdp.Node
-
-			if err := queryWithDeadline(ctx, wait, func(ctx context.Context) error {
-				return chromedp.Nodes("input, textarea, select", &inputNodes, chromedp.ByQueryAll, chromedp.FromNode(formNode)).Do(ctx)
-			}); err != nil {
-				return err
-			}
-
-			formAttrs := formNodeAttrs[idx]
-			form := Form{
-				Action: formAttrs[0],
-				Method: strings.ToUpper(formAttrs[1]),
-				Class:  formAttrs[2],
-				ID:     formAttrs[3],
-				Inputs: make([]Input, len(inputNodes)),
-			}
-
-			inputNodeAttrs := attributesFromNodes(ctx, inputNodes, []string{"class", "id", "placeholder", "name", "type", "value"})
-			for jdx, inputAttrs := range inputNodeAttrs {
-				id := inputAttrs[1]
-
-				form.Inputs[jdx].Class = inputAttrs[0]
-				form.Inputs[jdx].ID = id
-				form.Inputs[jdx].Placeholder = strings.TrimSpace(inputAttrs[2])
-				form.Inputs[jdx].Name = inputAttrs[3]
-				form.Inputs[jdx].Type = inputAttrs[4]
-				form.Inputs[jdx].Value = inputAttrs[5]
-
-				if inputAttrs[4] != "hidden" {
-					form.Inputs[jdx].Label = findLabelTextForInput(ctx, labelsByID[id], inputNodes[jdx], logger)
-				}
-			}
-
-			result.Forms = append(result.Forms, form)
-		}
-
-		return nil
-	}))
 }
 
 func runLinkAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) error {
@@ -351,6 +304,10 @@ func runCookieAnalysis(ctx context.Context, result *AnalyzeResult) error {
 	return nil
 }
 
+func runInitialFormScan(ctx context.Context, wait int64, result *AnalyzeResult, logger *zerolog.Logger) error {
+	return scanForForms(ctx, wait, &result.Forms, logger)
+}
+
 func runClipboardInteractions(ctx context.Context, wait int64, result *AnalyzeResult, logger *zerolog.Logger) error {
 	clipboardJS, err := jsFS.ReadFile("js/clipboard.js")
 	if err != nil {
@@ -432,6 +389,98 @@ func runClipboardInteractions(ctx context.Context, wait int64, result *AnalyzeRe
 	}
 
 	result.ClipboardTexts = cc.Values()
+
+	return nil
+}
+
+// TODO:
+// - using the initially scanned forms, prioritize which forms to submit first.
+//   - add a task parameter for max form submissions and default to 1.
+//
+// - submit each submittable form and return navigation to initial page.
+func runFormInteractions(ctx context.Context, wait int64, maxSubmits int, crawler *Crawler, result *AnalyzeResult, logger *zerolog.Logger) error {
+	// Create a slice of form pointers and sort them by priority. We'll only
+	// perform maxSubmits and will prioritize forms using a custom ranking based
+	// upon the fields defined.
+	// knownForms := make([]*Form, len(result.Forms))
+	knownForms := []*Form{}
+	for _, f := range result.Forms {
+		knownForms = append(knownForms, &f)
+	}
+
+	slices.SortFunc(knownForms, func(aform, bform *Form) int {
+		a := aform.Score()
+		b := bform.Score()
+
+		if b < a {
+			return -1
+		} else if b > a {
+			return 1
+		}
+
+		return 0
+	})
+
+	if len(knownForms) == 0 {
+		return nil
+	}
+
+	result.FormSubmissions = []FormSubmission{}
+
+	for index, nextForm := range knownForms {
+		log.Printf("%d %+v\n", index, nextForm)
+
+		// When we're submitting against multiple forms, we have to return the
+		// browser back to the original Location and ensure the form is still
+		// present.
+		if index > 0 {
+			if err := chromedp.Run(ctx, chromedp.Navigate(result.Location)); err != nil {
+				return err
+			}
+
+			exists, err := checkElementExists(ctx, nextForm.xpath)
+			if err != nil || !exists {
+				logger.Warn().Msgf("form at index %d not found on return visit", index)
+
+				continue
+			}
+		}
+
+		forms := []Form{}
+		if err := scanForForms(ctx, wait, &forms, logger); err != nil {
+			return err
+		}
+
+		// Find the first not known form
+		if nextForm == nil {
+			logger.Debug().Msgf("found %d forms total", len(knownForms))
+
+			break
+		}
+
+		submission := FormSubmission{}
+		if err := crawler.captureVisit(ctx, func(ctx context.Context) error {
+			visit := crawler.currentVisit
+
+			if err := analyzeForm(ctx, nextForm, visit, logger); err != nil {
+				return err
+			}
+
+			return nil
+		}); err != nil {
+			return err
+		}
+
+		submission.Method = nextForm.Method
+		submission.Visit = crawler.LastVisit()
+
+		result.FormSubmissions = append(result.FormSubmissions, submission)
+
+		// We have hit our max form submission limit
+		if index+1 >= maxSubmits {
+			break
+		}
+	}
 
 	return nil
 }
@@ -520,29 +569,20 @@ func attributesFromNodes(ctx context.Context, nodes []*cdp.Node, attributes []st
 	return values
 }
 
-// Try to find label text. First, we'll look for a label node whose
-// `for` attribute is equal to the `id` attribute of the input. Next,
-// we'll check if the input has a label parent. If so, we'll take the
-// text content of that parent.
-func findLabelTextForInput(ctx context.Context, labelNode *cdp.Node, inputNode *cdp.Node, logger *zerolog.Logger) string {
-	inputLog := logger.With().Str("input", inputNode.FullXPath()).Logger()
+// checkElementExists is a custom action to check for the presence of an element via XPath.
+func checkElementExists(ctx context.Context, xpath string) (bool, error) {
+	var nodes []*cdp.Node
 
-	if labelNode == nil {
-		labelNode = findParentByTagName("LABEL", inputNode)
+	err := chromedp.Run(ctx, chromedp.Nodes(xpath, &nodes, chromedp.BySearch, chromedp.AtLeast(0)))
+	if err != nil {
+		return false, err
 	}
 
-	if labelNode == nil {
-		inputLog.Debug().Msg("no label node found")
-
-		return ""
+	if len(nodes) > 0 {
+		return true, nil
 	}
 
-	var label string
-	if err := chromedp.Run(ctx, chromedp.TextContent(labelNode.FullXPath(), &label, chromedp.BySearch)); err != nil {
-		logger.Warn().Msgf("form label error: %v", err)
-	}
-
-	return strings.TrimSpace(label)
+	return false, nil
 }
 
 func findParentByTagName(name string, node *cdp.Node) *cdp.Node {

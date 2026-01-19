@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"errors"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,8 +18,9 @@ import (
 var testFS embed.FS
 
 type handler struct {
-	cookies []http.Cookie
-	dir     string
+	cookies   []http.Cookie
+	redirects map[string]string
+	dir       string
 }
 
 type TestWebServerOption func(*handler)
@@ -29,8 +31,19 @@ func WithSetCookie(cookie http.Cookie) TestWebServerOption {
 	}
 }
 
+func WithRedirectFromPOST(path, dest string) TestWebServerOption {
+	return func(h *handler) {
+		h.redirects[path] = dest
+	}
+}
+
 func NewTestWebServer(dir string, opts ...TestWebServerOption) *httptest.Server {
-	h := handler{make([]http.Cookie, 0), dir}
+	h := handler{
+		make([]http.Cookie, 0),
+		make(map[string]string),
+		dir,
+	}
+
 	for _, opt := range opts {
 		opt(&h)
 	}
@@ -43,9 +56,20 @@ func NewTestWebServer(dir string, opts ...TestWebServerOption) *httptest.Server 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 
+	if r.Method == http.MethodPost {
+		if dest, ok := h.redirects[path]; ok {
+			http.Redirect(w, r, dest, http.StatusFound)
+
+			return
+		}
+	}
+
 	// If the client requests "/", serve "index.html" in that directory.
+	ext := filepath.Ext(path)
 	if path == "/" || path == "" {
 		path = "/index.html"
+	} else if ext == "" {
+		path += ".html"
 	}
 
 	fullPath := filepath.Join("testdata", h.dir, path)
@@ -64,6 +88,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for _, cookie := range h.cookies {
 		http.SetCookie(w, &cookie)
 	}
+
+	log.Printf("request %s", fullPath)
 
 	http.ServeFileFS(w, r, testFS, fullPath)
 }
