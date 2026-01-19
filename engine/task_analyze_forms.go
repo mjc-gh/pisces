@@ -29,6 +29,8 @@ const (
 	InputLastName
 )
 
+const INPUT_HIDDEN = "hidden"
+
 type formData interface {
 	Email() string
 	Phone() string
@@ -97,7 +99,7 @@ func scanForForms(ctx context.Context, wait int64, forms *[]Form, logger *zerolo
 				form.Inputs[jdx].Value = inputAttrs[5]
 				form.Inputs[jdx].xpath = inputNodes[jdx].FullXPath()
 
-				if inputAttrs[4] != "hidden" {
+				if inputAttrs[4] != INPUT_HIDDEN {
 					form.Inputs[jdx].Label = findLabelTextForInput(ctx, labelsByID[id], inputNodes[jdx], logger)
 				}
 			}
@@ -161,14 +163,20 @@ func completeForm(ctx context.Context, form *Form, logger *zerolog.Logger) strin
 	return lastInputXPath
 }
 
-func analyzeForm(ctx context.Context, form *Form, visit *Visit, logger *zerolog.Logger) error {
+func analyzeForm(ctx context.Context, form *Form, visit *Visit, logger *zerolog.Logger) (bool, error) {
 	visit.RequestedURL = form.Action
 
 	inputXPath := completeForm(ctx, form, logger)
 	if inputXPath == "" {
 		logger.Info().Msgf("form %s has no inputs to interact with", form)
 
-		return nil
+		if len(form.Inputs) > 0 && !form.AllInputsHidden() {
+			inputXPath = form.Inputs[0].xpath
+		}
+	}
+
+	if inputXPath == "" {
+		return false, nil
 	}
 
 	if err := chromedp.Run(
@@ -180,10 +188,10 @@ func analyzeForm(ctx context.Context, form *Form, visit *Visit, logger *zerolog.
 		chromedp.Sleep(2*time.Second),
 		chromedp.OuterHTML("html", &visit.Body),
 	); err != nil {
-		return err
+		return false, err
 	}
 
-	return nil
+	return true, nil
 }
 
 func completeFormInput(ctx context.Context, xpath, value string) error {
@@ -272,7 +280,7 @@ func (f *Form) Score() int {
 
 	for _, input := range f.Inputs {
 		switch input.Type {
-		case "hidden":
+		case INPUT_HIDDEN:
 			// Hidden inputs don't contribute to score
 			continue
 		case "password":
@@ -300,6 +308,16 @@ func (f *Form) Score() int {
 	}
 
 	return score
+}
+
+func (f *Form) AllInputsHidden() bool {
+	for _, input := range f.Inputs {
+		if input.Type != INPUT_HIDDEN {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (f *Form) String() string {

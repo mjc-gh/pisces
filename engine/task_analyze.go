@@ -5,7 +5,6 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	"log"
 	"slices"
 	"strings"
 	"time"
@@ -148,7 +147,7 @@ func performAnalyzeTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 	}
 
 	if doFormInteraction {
-		if err := runFormInteractions(ctx, wait, maxFormSubmits, &crawler, &result, logger); err != nil {
+		if err := runFormInteractions(ctx, maxFormSubmits, &crawler, &result, logger); err != nil {
 			logger.Warn().Msgf("form interaction error: %v", err)
 		}
 	}
@@ -398,7 +397,7 @@ func runClipboardInteractions(ctx context.Context, wait int64, result *AnalyzeRe
 //   - add a task parameter for max form submissions and default to 1.
 //
 // - submit each submittable form and return navigation to initial page.
-func runFormInteractions(ctx context.Context, wait int64, maxSubmits int, crawler *Crawler, result *AnalyzeResult, logger *zerolog.Logger) error {
+func runFormInteractions(ctx context.Context, maxSubmits int, crawler *Crawler, result *AnalyzeResult, logger *zerolog.Logger) error {
 	// Create a slice of form pointers and sort them by priority. We'll only
 	// perform maxSubmits and will prioritize forms using a custom ranking based
 	// upon the fields defined.
@@ -428,8 +427,6 @@ func runFormInteractions(ctx context.Context, wait int64, maxSubmits int, crawle
 	result.FormSubmissions = []FormSubmission{}
 
 	for index, nextForm := range knownForms {
-		log.Printf("%d %+v\n", index, nextForm)
-
 		// When we're submitting against multiple forms, we have to return the
 		// browser back to the original Location and ensure the form is still
 		// present.
@@ -446,11 +443,6 @@ func runFormInteractions(ctx context.Context, wait int64, maxSubmits int, crawle
 			}
 		}
 
-		forms := []Form{}
-		if err := scanForForms(ctx, wait, &forms, logger); err != nil {
-			return err
-		}
-
 		// Find the first not known form
 		if nextForm == nil {
 			logger.Debug().Msgf("found %d forms total", len(knownForms))
@@ -458,17 +450,24 @@ func runFormInteractions(ctx context.Context, wait int64, maxSubmits int, crawle
 			break
 		}
 
+		submitted := false
 		submission := FormSubmission{}
 		if err := crawler.captureVisit(ctx, func(ctx context.Context) error {
+			var err error
+
 			visit := crawler.currentVisit
 
-			if err := analyzeForm(ctx, nextForm, visit, logger); err != nil {
+			if submitted, err = analyzeForm(ctx, nextForm, visit, logger); err != nil {
 				return err
 			}
 
 			return nil
 		}); err != nil {
 			return err
+		}
+
+		if !submitted {
+			continue
 		}
 
 		submission.Method = nextForm.Method

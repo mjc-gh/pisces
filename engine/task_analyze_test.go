@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"log"
 	"net/http"
 	"slices"
 	"strings"
@@ -150,7 +149,7 @@ func TestPerformAnalyzeTaskWithForms(t *testing.T) {
 
 	search := ar.Forms[searchIdx]
 	assert.Equal(t, "GET", search.Method)
-	assert.Equal(t, server.URL+"/", search.Action)
+	assert.Equal(t, server.URL+"/search", search.Action)
 	assert.Equal(t, "inline-form", search.Class)
 	assert.Len(t, search.Inputs, 1)
 	assert.Equal(t, "thin", search.Inputs[0].Class)
@@ -233,7 +232,7 @@ func TestPerformAnalyzeTaskWithFormInteractions(t *testing.T) {
 }
 
 func TestPerformAnalyzeTaskWithFormInteractionsMultipleForms(t *testing.T) {
-	server := piscestest.NewTestWebServer("forms")
+	server := piscestest.NewTestWebServer("forms", piscestest.WithRedirectFromPOST("/search", "/"))
 	task := NewTask("analyze", server.URL)
 	task.params = map[string]any{
 		"wait": 100, "clipboard": false, "max-form-submits": 2,
@@ -253,8 +252,25 @@ func TestPerformAnalyzeTaskWithFormInteractionsMultipleForms(t *testing.T) {
 	fs1 := ar.FormSubmissions[0]
 	fs2 := ar.FormSubmissions[1]
 
-	log.Printf("%s %s", fs1.RequestedURL, fs2.RequestedURL)
-
 	assert.True(t, strings.HasSuffix(fs1.RequestedURL, "/login"), "login form first")
-	assert.True(t, strings.HasSuffix(fs2.RequestedURL, "/"), "GET form second")
+	assert.True(t, strings.HasSuffix(fs2.RequestedURL, "/search"), "GET form second")
+
+	assert.Len(t, fs2.RedirectLocations, 1)
+}
+
+func TestPerformAnalyzeTaskWithFormInteractionsHiddenForm(t *testing.T) {
+	server := piscestest.NewTestWebServer("hiddenform")
+	task := NewTask("analyze", server.URL)
+	task.params = map[string]any{"wait": 100, "clipboard": false}
+
+	ctx, cancel := piscestest.NewTestContext()
+	defer cancel()
+
+	ar, err := performAnalyzeTask(ctx, &task, pisces.Logger())
+
+	require.NoError(t, err)
+	assert.NotNil(t, ar)
+
+	assert.Len(t, ar.Forms, 1)
+	assert.Empty(t, ar.FormSubmissions)
 }

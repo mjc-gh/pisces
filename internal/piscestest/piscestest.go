@@ -54,14 +54,15 @@ func NewTestWebServer(dir string, opts ...TestWebServerOption) *httptest.Server 
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log.Printf("piscestest request: %s %s\n", r.Method, r.URL)
+
 	path := r.URL.Path
 
-	if r.Method == http.MethodPost {
-		if dest, ok := h.redirects[path]; ok {
-			http.Redirect(w, r, dest, http.StatusFound)
+	// Check for redirects
+	if dest, ok := h.redirects[path]; ok {
+		http.Redirect(w, r, dest, http.StatusFound)
 
-			return
-		}
+		return
 	}
 
 	// If the client requests "/", serve "index.html" in that directory.
@@ -88,8 +89,6 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for _, cookie := range h.cookies {
 		http.SetCookie(w, &cookie)
 	}
-
-	log.Printf("request %s", fullPath)
 
 	http.ServeFileFS(w, r, testFS, fullPath)
 }
