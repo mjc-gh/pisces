@@ -25,13 +25,14 @@ func TestCrawlerVisit(t *testing.T) {
 	ctx, _ := chromedp.NewContext(pctx)
 	server := piscestest.NewTestWebServer("simple")
 	crawler := NewCrawler("pisces", 1920, 1080)
+	crawler.SetupListeners(ctx, pisces.Logger())
 
 	err := crawler.Visit(ctx, server.URL, pisces.Logger())
 	require.NoError(t, err)
 
 	visit := crawler.LastVisit()
 	assert.NotNil(t, visit)
-	assert.NotEmpty(t, visit.RequestedUrl)
+	assert.NotEmpty(t, visit.RequestedURL)
 	assert.NotEmpty(t, visit.Location)
 	assert.Empty(t, visit.RedirectLocations)
 	assert.NotContains(t, visit.InitialBody, "Hello world!")

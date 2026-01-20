@@ -3,6 +3,7 @@ package engine
 import (
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -134,7 +135,7 @@ func TestPerformAnalyzeTaskWithClipboardInteractions(t *testing.T) {
 func TestPerformAnalyzeTaskWithForms(t *testing.T) {
 	server := piscestest.NewTestWebServer("forms")
 	task := NewTask("analyze", server.URL)
-	task.params = map[string]any{"wait": 100}
+	task.params = map[string]any{"wait": 100, "forms": false, "clipboard": false}
 
 	ctx, cancel := piscestest.NewTestContext()
 	defer cancel()
@@ -144,10 +145,11 @@ func TestPerformAnalyzeTaskWithForms(t *testing.T) {
 	require.NoError(t, err)
 
 	searchIdx := slices.IndexFunc(ar.Forms, piscestest.FindByID[Form]("search-form"))
-	search := ar.Forms[searchIdx]
+	require.NotEqual(t, -1, searchIdx, "search form missing from results")
 
+	search := ar.Forms[searchIdx]
 	assert.Equal(t, "GET", search.Method)
-	assert.Equal(t, server.URL+"/", search.Action)
+	assert.Equal(t, server.URL+"/search", search.Action)
 	assert.Equal(t, "inline-form", search.Class)
 	assert.Len(t, search.Inputs, 1)
 	assert.Equal(t, "thin", search.Inputs[0].Class)
@@ -159,8 +161,9 @@ func TestPerformAnalyzeTaskWithForms(t *testing.T) {
 	assert.Empty(t, search.Inputs[0].Value)
 
 	loginIdx := slices.IndexFunc(ar.Forms, piscestest.FindByID[Form]("login-form"))
-	login := ar.Forms[loginIdx]
+	require.NotEqual(t, -1, loginIdx, "login form missing from results")
 
+	login := ar.Forms[loginIdx]
 	assert.Equal(t, "POST", login.Method)
 	assert.Equal(t, server.URL+"/login", login.Action)
 	assert.Equal(t, "block-form", login.Class)
@@ -184,4 +187,90 @@ func TestPerformAnalyzeTaskWithForms(t *testing.T) {
 	require.NotNil(t, hiddenInput)
 	assert.Empty(t, hiddenInput.Label)
 	assert.Equal(t, "1234", hiddenInput.Value)
+}
+
+func TestPerformAnalyzeTaskWithFormInteractions(t *testing.T) {
+	server := piscestest.NewTestWebServer("loginform")
+	task := NewTask("analyze", server.URL)
+	task.params = map[string]any{"wait": 100}
+
+	ctx, cancel := piscestest.NewTestContext()
+	defer cancel()
+
+	ar, err := performAnalyzeTask(ctx, &task, pisces.Logger())
+
+	require.NoError(t, err)
+	assert.NotNil(t, ar)
+
+	assert.Len(t, ar.Forms, 1)
+	require.Len(t, ar.FormSubmissions, 1)
+
+	fs := ar.FormSubmissions[0]
+	assert.True(t, strings.HasSuffix(fs.RequestedURL, "/submit"), fs.RequestedURL+" does not end with /submit")
+	require.Len(t, fs.Assets, 2)
+
+	scriptIdx := slices.IndexFunc(fs.Assets, matchAsset("submit.js"))
+	scriptAsset := fs.Assets[scriptIdx]
+	assert.Equal(t, "Script", scriptAsset.ResourceType)
+	assert.Equal(t, int64(200), scriptAsset.ResponseStatus)
+	assert.NotEmpty(t, scriptAsset.RequestHeaders)
+	assert.NotEmpty(t, scriptAsset.ResponseHeaders)
+	assert.NotEmpty(t, scriptAsset.Body)
+	assert.NotEmpty(t, scriptAsset.InitiatorURL)
+	assert.Nil(t, scriptAsset.CertificateInfo)
+
+	styleIdx := slices.IndexFunc(fs.Assets, matchAsset("style.css"))
+	styleAsset := fs.Assets[styleIdx]
+	assert.NotEqual(t, -1, styleIdx)
+	assert.Equal(t, "Stylesheet", styleAsset.ResourceType)
+	assert.Equal(t, int64(200), styleAsset.ResponseStatus)
+	assert.NotEmpty(t, styleAsset.RequestHeaders)
+	assert.NotEmpty(t, styleAsset.ResponseHeaders)
+	assert.NotEmpty(t, styleAsset.Body)
+	assert.NotEmpty(t, styleAsset.InitiatorURL)
+	assert.Nil(t, styleAsset.CertificateInfo)
+}
+
+func TestPerformAnalyzeTaskWithFormInteractionsMultipleForms(t *testing.T) {
+	server := piscestest.NewTestWebServer("forms", piscestest.WithRedirectFromPOST("/search", "/"))
+	task := NewTask("analyze", server.URL)
+	task.params = map[string]any{
+		"wait": 100, "clipboard": false, "max-form-submits": 2,
+	}
+
+	ctx, cancel := piscestest.NewTestContext()
+	defer cancel()
+
+	ar, err := performAnalyzeTask(ctx, &task, pisces.Logger())
+
+	require.NoError(t, err)
+	assert.NotNil(t, ar)
+
+	assert.Len(t, ar.Forms, 2)
+	require.Len(t, ar.FormSubmissions, 2)
+
+	fs1 := ar.FormSubmissions[0]
+	fs2 := ar.FormSubmissions[1]
+
+	assert.True(t, strings.HasSuffix(fs1.RequestedURL, "/login"), "login form first")
+	assert.True(t, strings.HasSuffix(fs2.RequestedURL, "/search"), "GET form second")
+
+	assert.Len(t, fs2.RedirectLocations, 1)
+}
+
+func TestPerformAnalyzeTaskWithFormInteractionsHiddenForm(t *testing.T) {
+	server := piscestest.NewTestWebServer("hiddenform")
+	task := NewTask("analyze", server.URL)
+	task.params = map[string]any{"wait": 100, "clipboard": false}
+
+	ctx, cancel := piscestest.NewTestContext()
+	defer cancel()
+
+	ar, err := performAnalyzeTask(ctx, &task, pisces.Logger())
+
+	require.NoError(t, err)
+	assert.NotNil(t, ar)
+
+	assert.Len(t, ar.Forms, 1)
+	assert.Empty(t, ar.FormSubmissions)
 }

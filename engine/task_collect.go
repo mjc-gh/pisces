@@ -19,6 +19,8 @@ func performCollectTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 	defer cancel()
 
 	crawler := NewCrawler(task.userAgent, int64(task.winWidth), int64(task.winHeight))
+	crawler.SetupListeners(ctx, logger)
+
 	err := crawler.Visit(ctx, task.url, logger)
 	if err != nil {
 		return CollectResult{}, err

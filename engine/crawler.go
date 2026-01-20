@@ -15,15 +15,18 @@ type Crawler struct {
 	userAgent string
 	winWidth  int64
 	winHeight int64
+
+	currentVisit *Visit
+	mainReqID    network.RequestID
 }
 
 type Visit struct {
-	RequestedUrl      string           `json:"requested_url"`
+	RequestedURL      string           `json:"requested_url"`
 	Location          string           `json:"location"`
 	RedirectLocations []Redirect       `json:"redirect_locations"`
-	CertificateInfo   *CertificateInfo `json:"certificate_info"`
+	CertificateInfo   *CertificateInfo `json:"certificate_info,omitempty"`
 	Body              string           `json:"body"`
-	InitialBody       string           `json:"initial_body"`
+	InitialBody       string           `json:"initial_body,omitempty"`
 	Assets            []*Asset         `json:"assets"`
 
 	assetsMap map[string]*Asset
@@ -56,17 +59,17 @@ type CertificateInfo struct {
 
 func NewCrawler(userAgent string, winWidth, winHeight int64) Crawler {
 	return Crawler{
-		make([]Visit, 0), userAgent, winWidth, winHeight,
+		make([]Visit, 0), userAgent, winWidth, winHeight, nil, "",
 	}
 }
 
-func (c *Crawler) Visit(ctx context.Context, url string, logger *zerolog.Logger) error {
-	var mainReqID network.RequestID
-
-	visit := Visit{RequestedUrl: url}
-	visit.assetsMap = make(map[string]*Asset)
-
+func (c *Crawler) SetupListeners(ctx context.Context, logger *zerolog.Logger) {
 	chromedp.ListenTarget(ctx, func(ev any) {
+		visit := c.currentVisit
+		if visit == nil {
+			return
+		}
+
 		switch ev := ev.(type) {
 		case *network.EventRequestWillBeSent:
 			if ev.Initiator == nil {
@@ -75,10 +78,9 @@ func (c *Crawler) Visit(ctx context.Context, url string, logger *zerolog.Logger)
 				return
 			}
 
-			// "document" resource request types
 			if ev.Type == network.ResourceTypeDocument && ev.Initiator.Type == "other" {
-				if mainReqID == "" {
-					mainReqID = ev.RequestID
+				if c.mainReqID == "" {
+					c.mainReqID = ev.RequestID
 				}
 
 				// Capture redirects from navigation
@@ -95,7 +97,6 @@ func (c *Crawler) Visit(ctx context.Context, url string, logger *zerolog.Logger)
 					}
 				}
 			} else {
-				// Track request as an asset
 				visit.assetsMap[string(ev.RequestID)] = &Asset{
 					URL:            ev.Request.URL,
 					ResourceType:   string(ev.Type),
@@ -111,11 +112,11 @@ func (c *Crawler) Visit(ctx context.Context, url string, logger *zerolog.Logger)
 				asset.CertificateInfo = getCertInfo(secDetails)
 				asset.ResponseHeaders = ev.Response.Headers
 				asset.ResponseStatus = ev.Response.Status
-			} else if mainReqID == ev.RequestID {
+			} else if c.mainReqID == ev.RequestID {
 				visit.CertificateInfo = getCertInfo(secDetails)
 			}
 		case *network.EventLoadingFinished:
-			if ev.RequestID == mainReqID {
+			if ev.RequestID == c.mainReqID {
 				go getResponseBody(ctx, ev.RequestID, func(body []byte, err error) {
 					if err != nil {
 						logger.Warn().Msgf("crawler getResponseBody main request error: %s", err)
@@ -140,30 +141,29 @@ func (c *Crawler) Visit(ctx context.Context, url string, logger *zerolog.Logger)
 			}
 		}
 	})
+}
 
-	visitSteps := []chromedp.Action{
-		network.Enable(),
-		chromedp.EmulateViewport(c.winWidth, c.winHeight),
-		emulation.SetUserAgentOverride(c.userAgent),
-		chromedp.Navigate(url),
-		chromedp.Location(&visit.Location),
-		chromedp.OuterHTML("html", &visit.Body),
-	}
+// Visit a given URL and capture all the assets the document includes.
+func (c *Crawler) Visit(ctx context.Context, url string, logger *zerolog.Logger) error {
+	return c.captureVisit(ctx, func(ctx context.Context) error {
+		visit := c.currentVisit
+		if visit == nil {
+			return ErrInvalidCrawlerState
+		}
 
-	err := chromedp.Run(ctx, visitSteps...)
-	if err != nil {
-		return err
-	}
+		visit.RequestedURL = url
 
-	// Flatten the assets map to slice of Assets
-	for _, asset := range visit.assetsMap {
-		visit.Assets = append(visit.Assets, asset)
-	}
+		visitSteps := chromedp.Tasks{
+			network.Enable(),
+			chromedp.EmulateViewport(c.winWidth, c.winHeight),
+			emulation.SetUserAgentOverride(c.userAgent),
+			chromedp.Navigate(url),
+			chromedp.Location(&visit.Location),
+			chromedp.OuterHTML("html", &visit.Body),
+		}
 
-	// Add visit to slice
-	c.Visits = append(c.Visits, visit)
-
-	return nil
+		return chromedp.Run(ctx, visitSteps...)
+	})
 }
 
 func (c *Crawler) LastVisit() *Visit {
@@ -173,6 +173,36 @@ func (c *Crawler) LastVisit() *Visit {
 	}
 
 	return &c.Visits[l-1]
+}
+
+type visitCallback func(context.Context) error
+
+// Visit a given URL and capture all the assets the document includes.
+func (c *Crawler) captureVisit(ctx context.Context, callback visitCallback) error {
+	visit := Visit{}
+	visit.RedirectLocations = []Redirect{}
+	visit.assetsMap = make(map[string]*Asset)
+
+	c.currentVisit = &visit
+
+	if err := callback(ctx); err != nil {
+		return err
+	}
+
+	// Flatten the assets map to slice of Assets
+	for _, asset := range visit.assetsMap {
+		visit.Assets = append(visit.Assets, asset)
+	}
+
+	// Clear assetMap (no longer needed)
+	visit.assetsMap = nil
+
+	// Update crawler state
+	c.Visits = append(c.Visits, visit)
+	c.currentVisit = nil
+	c.mainReqID = ""
+
+	return nil
 }
 
 func getResponseBody(ctx context.Context, reqID network.RequestID, callback func([]byte, error)) {

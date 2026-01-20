@@ -58,9 +58,13 @@ func main() {
 		&cli.IntFlag{Name: "wait", Value: 300, Aliases: []string{"w"}, Usage: "wait time (seconds) after load before analysis"},
 	}, withOutputFlags...)
 
-	analyzeFlags := append([]cli.Flag{
+	analyzeFlags := []cli.Flag{
+		&cli.IntFlag{Name: "max-form-submits", Value: 1, Usage: "maximum number of forms to submit when interacting"},
 		&cli.BoolFlag{Name: "no-clipboard", Usage: "disable clipboard interactions"},
-	}, withWaitFlags...)
+		&cli.BoolFlag{Name: "no-forms", Usage: "disable form interactions"},
+	}
+
+	analyzeFlags = append(analyzeFlags, withWaitFlags...)
 
 	ver := version
 	if ver == "" {
@@ -81,6 +85,8 @@ func main() {
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					params := map[string]any{
 						"clipboard": !cmd.Bool("no-clipboard"),
+						"forms":     !cmd.Bool("no-forms"),
+						"maxForms":  cmd.Int("max-form-submits"),
 						"wait":      cmd.Int("wait"),
 					}
 
