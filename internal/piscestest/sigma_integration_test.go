@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
-	"time"
 
 	"github.com/mjc-gh/pisces"
 	"github.com/mjc-gh/pisces/engine"
@@ -44,10 +43,7 @@ func TestSigmaRuleMatchesTestSite(t *testing.T) {
 	)
 	e.Add(task)
 
-	go func() {
-		time.Sleep(250 * time.Millisecond)
-		e.Shutdown()
-	}()
+	go e.Shutdown()
 
 	ctxEval := context.Background()
 	gotMatch := false

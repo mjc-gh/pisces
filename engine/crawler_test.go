@@ -24,6 +24,7 @@ func TestCrawlerVisit(t *testing.T) {
 
 	ctx, _ := chromedp.NewContext(pctx)
 	server := piscestest.NewTestWebServer("simple")
+	defer server.Close()
 	crawler := NewCrawler("pisces", 1920, 1080)
 	crawler.SetupListeners(ctx, pisces.Logger())
 
