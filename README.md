@@ -62,28 +62,26 @@ GLOBAL OPTIONS:
 All commands accept the following flags:
 
 ```
-   --debug, -d                 (default: false)
-   --remote, -r                (default: false)
-   --headfull, -H              (default: false)
-   --concurrency int, -c int   (default: 0)
-   --port int                  (default: 9222)
-   --device-type string        (default: "desktop")
-   --device-size string        (default: "large")
-   --host string               (default: "127.0.0.1")
-   --user-agent string         (default: "chrome")
+   --debug, -d                 enable debug logging (default: false)
+   --headfull, -H              run browser in headfull mode (default: false)
+   --concurrency int, -c int   number of concurrent workers (default: 0)
+   --device-type string        device type (desktop/mobile/tablet) (default: "desktop")
+   --device-size string        device size preset (default: "large")
+   --remote-port int           remote DevTools port (default: 9222)
+   --remote-host string        remote DevTools host (default: "127.0.0.1")
+   --user-agent string         browser user-agent preset (default: "chrome")
    --help, -h                  show help
 ```
 
 See command-specific help for output and additional task specific flags.
 
-The `--remote` flag will use a `RemoteAllocator`. It's primarily used
-with the [`chromedp` headless shell
-container](https://github.com/chromedp/docker-headless-shell) and is
-used in conjunction with the `--host` and `--port` flags.
+The `--remote-host` and `--remote-port` flags are provided, the
+`RemoteAllocator` used. This is primarily used with the
+[`chromedp` headless shell container](https://github.com/chromedp/docker-headless-shell).
 
-The `--headfull` tag is mutually exclusive with the `--remote` flag.
-When used locally, it will enable the Chrome window and you will see the
-browser in action.
+The `--headfull` tag is mutually exclusive with the remote flags.  When used
+locally, it will enable the Chrome window and you will see the browser in
+action.
 
 ### Result Output
 
