@@ -70,21 +70,14 @@ func (c *Crawler) SetupListeners(ctx context.Context, logger *zerolog.Logger) {
 			return
 		}
 
-		// case *page.EventLifecycleEvent:
-		//   Name == "networkIdle"
-
 		switch ev := ev.(type) {
 		case *network.EventRequestWillBeSent:
-			// log.Println("EventResponseReceived")
-
 			if ev.Initiator == nil {
 				logger.Warn().Msg("crawler has nil initiator in EventRequestWillBeSent")
 
 				return
 			}
 
-			// "document" resource request types
-			// log.Printf("%s %s", ev.Type, ev.Initiator.Type)
 			if ev.Type == network.ResourceTypeDocument && ev.Initiator.Type == "other" {
 				if c.mainReqID == "" {
 					c.mainReqID = ev.RequestID
@@ -104,8 +97,6 @@ func (c *Crawler) SetupListeners(ctx context.Context, logger *zerolog.Logger) {
 					}
 				}
 			} else {
-				// Track request as an asset
-				// log.Printf("assetsMap Request URL %v\n", ev.Request.URL)
 				visit.assetsMap[string(ev.RequestID)] = &Asset{
 					URL:            ev.Request.URL,
 					ResourceType:   string(ev.Type),
@@ -115,8 +106,6 @@ func (c *Crawler) SetupListeners(ctx context.Context, logger *zerolog.Logger) {
 			}
 
 		case *network.EventResponseReceived:
-			// log.Println("EventResponseReceived")
-
 			secDetails := ev.Response.SecurityDetails
 
 			if asset, ok := visit.assetsMap[string(ev.RequestID)]; ok {
@@ -127,8 +116,6 @@ func (c *Crawler) SetupListeners(ctx context.Context, logger *zerolog.Logger) {
 				visit.CertificateInfo = getCertInfo(secDetails)
 			}
 		case *network.EventLoadingFinished:
-			// log.Println("EventLoadingFinished")
-
 			if ev.RequestID == c.mainReqID {
 				go getResponseBody(ctx, ev.RequestID, func(body []byte, err error) {
 					if err != nil {
@@ -152,8 +139,6 @@ func (c *Crawler) SetupListeners(ctx context.Context, logger *zerolog.Logger) {
 					asset.Body = string(body)
 				})
 			}
-			// default:
-			// log.Printf("%T\n", ev)
 		}
 	})
 }
