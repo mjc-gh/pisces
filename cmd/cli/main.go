@@ -35,13 +35,12 @@ func main() {
 
 	baseFlags := []cli.Flag{
 		&cli.BoolFlag{Name: "debug", Aliases: []string{"d"}, Usage: "enable debug logging"},
-		&cli.BoolFlag{Name: "remote", Aliases: []string{"r"}, Usage: "use a remote Chrome DevTools instance"},
 		&cli.BoolFlag{Name: "headfull", Aliases: []string{"H"}, Usage: "run browser in headfull mode"},
 		&cli.IntFlag{Name: "concurrency", Aliases: []string{"c"}, Usage: "number of concurrent workers"},
-		&cli.IntFlag{Name: "port", Value: 9222, Usage: "remote DevTools port"},
+		&cli.IntFlag{Name: "remote-port", Value: 9222, Usage: "remote DevTools port"},
+		&cli.StringFlag{Name: "remote-host", Value: "127.0.0.1", Usage: "remote DevTools host"},
 		&cli.StringFlag{Name: "device-type", Value: "desktop", Usage: "device type (desktop/mobile/tablet)", Action: validDeviceType},
 		&cli.StringFlag{Name: "device-size", Value: "large", Usage: "device size preset", Action: validDeviceSize},
-		&cli.StringFlag{Name: "host", Value: "127.0.0.1", Usage: "remote DevTools host"},
 		&cli.StringFlag{Name: "user-agent", Value: "chrome", Usage: "browser user-agent preset"},
 		&cli.StringFlag{
 			Name:  "rules-dir",
@@ -128,14 +127,14 @@ func runTask(ctx context.Context, cmd *cli.Command, name string, params map[stri
 
 	deviceSize := cmd.StringArg("device-size")
 	deviceType := cmd.StringArg("device-type")
-	host := cmd.String("host")
-	port := cmd.Int("port")
+	remoteHost := cmd.String("remote-host")
+	remotePort := cmd.Int("remote-port")
 	urls := cmd.StringArgs("url")
 
 	opts := []engine.Option{engine.WithLogger(pisces.Logger())}
 
-	if cmd.Bool("remote") && host != "" && port != 0 {
-		opts = append(opts, engine.WithRemoteAllocator(host, port))
+	if remoteHost != "" && remotePort != 0 {
+		opts = append(opts, engine.WithRemoteAllocator(remoteHost, remotePort))
 	} else if cmd.Bool("headfull") {
 		opts = append(opts, engine.WithHeadfullLocalAllocator())
 	}
