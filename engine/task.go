@@ -8,13 +8,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mjc-gh/pisces/internal/browser"
 	"github.com/rs/zerolog"
 )
 
 type Task struct {
+	id        uuid.UUID
 	action    string
 	params    map[string]any
+	outChan   chan Result
 	url       string
 	userAgent string
 	winHeight int
@@ -42,6 +45,12 @@ func WithUserAgent(deviceType, userAgentAlias string) TaskOption {
 	}
 }
 
+func WithOutChannel() TaskOption {
+	return func(t *Task) {
+		t.outChan = make(chan Result, 1)
+	}
+}
+
 func NewTask(action, input string, opts ...TaskOption) Task {
 	url := input
 
@@ -50,6 +59,7 @@ func NewTask(action, input string, opts ...TaskOption) Task {
 	}
 
 	t := Task{
+		id:        uuid.New(),
 		action:    action,
 		params:    map[string]any{},
 		received:  time.Now(),
@@ -63,6 +73,10 @@ func NewTask(action, input string, opts ...TaskOption) Task {
 	}
 
 	return t
+}
+
+func (t Task) ID() string {
+	return t.id.String()
 }
 
 // IntParam will get a task parameter with the given key as an int value.
@@ -92,6 +106,10 @@ func (t Task) BoolParam(key string, defaultVal bool) bool {
 	}
 
 	return n
+}
+
+func (t Task) Result() chan Result {
+	return t.outChan
 }
 
 type Result struct {
