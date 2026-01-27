@@ -108,8 +108,8 @@ func (t Task) BoolParam(key string, defaultVal bool) bool {
 	return n
 }
 
-func (t Task) Result() chan Result {
-	return t.outChan
+func (t Task) Result() Result {
+	return <-t.outChan
 }
 
 type Result struct {

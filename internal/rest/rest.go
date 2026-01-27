@@ -121,7 +121,7 @@ func getAndValidateURL(c *gin.Context, logger *zerolog.Logger) (string, bool) {
 
 func respondWithTaskResult(c *gin.Context, task pe.Task) error {
 	// Get result from out channel
-	r := <-task.Result()
+	r := task.Result()
 
 	if r.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
