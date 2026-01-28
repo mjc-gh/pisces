@@ -7,6 +7,9 @@ go.tidy:
 build.cli:
 	go build -o build/pisces -ldflags="-X main.version=$(shell git tag --sort=-v:refname | head -1)" cmd/cli/main.go
 
+build.web:
+	go build -o build/pisces-web -ldflags="-X main.version=$(shell git tag --sort=-v:refname | head -1)" cmd/pisces-web/main.go
+
 check:
 	golangci-lint run
 

@@ -91,7 +91,19 @@ func (e *Engine) Start(ctx context.Context) {
 
 			for task := range tasks {
 				logger.Debug().Msgf("task worker #%d got task", idx)
-				results <- performTask(ctx, &task, logger)
+
+				r := performTask(ctx, &task, logger)
+
+				// If the task its own buffered channel, send
+				// the result there. If no channel was provided,
+				// we'll use the unbuffered results channel
+				// provided by the engine.
+				if task.resultCh != nil {
+					task.resultCh <- r
+				} else {
+					results <- r
+				}
+
 				logger.Debug().Msgf("task worker #%d sent result", idx)
 			}
 		}(i+1, e.tasks, e.results, e.wg.Done, e.logger)
