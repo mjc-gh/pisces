@@ -20,14 +20,6 @@ func TestTaskRoutes(t *testing.T) {
 	server := piscestest.NewTestWebServer("simple")
 	defer server.Close()
 
-	ctx, cancel := piscestest.NewTestContext()
-	defer cancel()
-
-	logger := pisces.SetupLogger(false)
-	e := engine.New(1, engine.WithLogger(logger))
-	e.Start(ctx)
-	defer e.Shutdown()
-
 	tests := []struct {
 		name        string
 		contentType string
@@ -55,6 +47,14 @@ func TestTaskRoutes(t *testing.T) {
 	for _, tt := range tests {
 		for _, tp := range taskPaths {
 			t.Run(tt.name, func(t *testing.T) {
+				ctx, cancel := piscestest.NewTestContext()
+				defer cancel()
+
+				logger := pisces.SetupLogger(false)
+				e := engine.New(1, engine.WithLogger(logger))
+				e.Start(ctx)
+				defer e.Shutdown()
+
 				// Replace URL placeholders with actual server URL
 				body := strings.ReplaceAll(tt.body, "{{URL}}", server.URL)
 				body = strings.ReplaceAll(body, "{{URL_ENCODED}}", url.QueryEscape(server.URL))
