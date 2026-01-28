@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"strconv"
@@ -99,10 +98,8 @@ func (e *Engine) Start(ctx context.Context) {
 				// the result there. If no channel was provided,
 				// we'll use the unbuffered results channel
 				// provided by the engine.
-				log.Printf("result = %v\n", r)
-				if task.outChan != nil {
-					log.Println("send outchan")
-					task.outChan <- r
+				if task.resultCh != nil {
+					task.resultCh <- r
 				} else {
 					results <- r
 				}

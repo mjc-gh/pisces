@@ -17,7 +17,7 @@ type Task struct {
 	id        uuid.UUID
 	action    string
 	params    map[string]any
-	outChan   chan Result
+	resultCh  chan Result
 	url       string
 	userAgent string
 	winHeight int
@@ -47,7 +47,7 @@ func WithUserAgent(deviceType, userAgentAlias string) TaskOption {
 
 func WithOutChannel() TaskOption {
 	return func(t *Task) {
-		t.outChan = make(chan Result, 1)
+		t.resultCh = make(chan Result, 1)
 	}
 }
 
@@ -109,7 +109,7 @@ func (t Task) BoolParam(key string, defaultVal bool) bool {
 }
 
 func (t Task) Result() Result {
-	return <-t.outChan
+	return <-t.resultCh
 }
 
 type Result struct {
