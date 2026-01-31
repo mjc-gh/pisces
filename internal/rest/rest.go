@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -97,6 +98,41 @@ func setupRouter(version string, engine *pe.Engine, l *zerolog.Logger) *gin.Engi
 		if err := respondWithTaskResult(c, t); err != nil {
 			logger.Warn().Msgf("collect error: %v", err)
 		}
+	})
+
+	// Setup route for screenshot
+	r.POST("/screenshot", func(c *gin.Context) {
+		url, ok := getAndValidateURL(c, &logger)
+		if !ok {
+			return
+		}
+
+		// Create a new task and add it to the engine
+		t := pe.NewTask("screenshot", url, pe.WithOutChannel())
+		engine.Add(t)
+
+		result := t.Result()
+		if result.Error != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{requestServerErr})
+			logger.Warn().Msgf("screenshot error: %v", result.Error)
+
+			return
+		}
+
+		sr, ok := result.Result.(*pe.ScreenshotResult)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{requestServerErr})
+			logger.Warn().Msg("screenshot result cast failed")
+
+			return
+		}
+
+		// Encode buffer to base64 and wrap in response
+		encodedImage := base64.StdEncoding.EncodeToString(*sr.Buffer)
+		result.Result = map[string]string{"image": encodedImage}
+
+		// Return the modified result
+		c.JSON(http.StatusOK, result)
 	})
 
 	return r
