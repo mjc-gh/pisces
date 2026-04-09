@@ -2,6 +2,8 @@
 
 This file provides guidance for AI coding agents working in the Pisces codebase.
 
+Always check tests and linting after making changes.
+
 ## Project Overview
 
 Pisces is a Go-based tool for analyzing phishing attack sites. It uses the Chrome
@@ -32,22 +34,17 @@ go test -v ./engine -run TestNewTask
 go test -v ./... -run TestPerformTaskUnknownType
 
 # Run tests matching a pattern
-go test -v ./... -run "TestTask.*"
-
-# Run tests in Docker (includes headless Chrome)
-make test.docker
+go test -v ./... -run "TestTask.*"z
 ```
 
 ## Lint Commands
 
 ```bash
 make check          # Run golangci-lint
-golangci-lint run   # Direct lint invocation
-gofmt -l .          # Check formatting (CI uses this)
 ```
 
 The project uses `golangci-lint` v2 with nearly all linters enabled. See
-`.golangci.yml` for the full configuration. Code must pass `gofmt` formatting.
+`.golangci.yml` for the full configuration. Code must pass `make check` formatting.
 
 ## Project Structure
 
@@ -159,12 +156,3 @@ require.Error(t, err)
 | `github.com/urfave/cli/v3` | CLI framework |
 | `github.com/gin-gonic/gin` | HTTP web framework |
 | `github.com/stretchr/testify` | Test assertions |
-
-## Docker
-
-```bash
-make test.docker      # Run tests in Docker (includes headless Chrome)
-make run.docker ARGS="--help"  # Run CLI in Docker
-make chromedp.run     # Start headless Chrome for local development (port 9222)
-make chromedp.pull    # Pull latest Chrome image
-```
