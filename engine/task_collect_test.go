@@ -184,12 +184,18 @@ func TestCollectTextOnlyJSONOnlyAddsKeys(t *testing.T) {
 	assets, ok := doc["assets"].([]any)
 	require.True(t, ok)
 
-	for _, a := range assets {
+	require.Len(t, assets, len(cr.Assets))
+
+	for i, a := range assets {
 		asset, ok := a.(map[string]any)
 		require.True(t, ok)
 
-		assert.Contains(t, asset, "content_type")
-		assert.Contains(t, asset, "size")
+		// Requests still in flight when the visit ends (e.g. the favicon) have
+		// no body, and so no content type or size either.
+		if len(cr.Assets[i].RawBody) > 0 {
+			assert.Contains(t, asset, "content_type")
+			assert.Contains(t, asset, "size")
+		}
 
 		delete(asset, "content_type")
 		delete(asset, "size")
