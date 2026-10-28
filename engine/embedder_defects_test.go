@@ -170,8 +170,7 @@ func slowSubresourceServer(t *testing.T, n int) *httptest.Server {
 
 // TestDefectBodyFetchRace: asset bodies are fetched in goroutines that write to
 // the Asset after captureVisit has returned. Fails on the original code under
-// `go test -race` with a data race report (and, without -race, with assets
-// that have no body).
+// `go test -race` with a data race report. Run it with -count=20 -race.
 func TestDefectBodyFetchRace(t *testing.T) {
 	server := slowSubresourceServer(t, 12)
 	task := NewTask("collect", server.URL)
