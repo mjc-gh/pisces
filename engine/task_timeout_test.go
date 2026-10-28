@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os/exec"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -91,9 +92,7 @@ func TestTaskWithoutTimeoutHasNoDeadline(t *testing.T) {
 }
 
 func TestTaskTimeoutReleasesBrowser(t *testing.T) {
-	if _, err := exec.LookPath("pgrep"); err != nil {
-		t.Skip("pgrep not available")
-	}
+	skipWithoutPS(t)
 
 	server, requests := hangServer(t)
 
@@ -105,19 +104,60 @@ func TestTaskTimeoutReleasesBrowser(t *testing.T) {
 	// Warm up the goroutine count (the workers and the allocator are running).
 	baseline := runtime.NumGoroutine()
 
-	task := NewTask("collect", server.URL, WithOutChannel(), WithTaskTimeout(500*time.Millisecond))
+	// Chrome takes a moment to start, so leave room for it to reach the server.
+	task := NewTask("collect", server.URL, WithOutChannel(), WithTaskTimeout(3*time.Second))
 	e.Add(task)
 
-	<-requests
+	waitForRequest(t, requests)
 	assert.Positive(t, chromeProcesses(marker), "expected a browser to be running for the task")
 
-	res := resultWithin(t, task, 5*time.Second)
+	res := resultWithin(t, task, 10*time.Second)
 	require.ErrorIs(t, res.Error, context.DeadlineExceeded)
 
 	assert.Eventually(t, func() bool { return chromeProcesses(marker) == 0 }, 5*time.Second, 50*time.Millisecond,
 		"chrome process of the timed out task was not released")
 	assert.Eventually(t, func() bool { return runtime.NumGoroutine() <= baseline+2 }, 5*time.Second, 50*time.Millisecond,
 		"goroutines did not return to the baseline of %d (now %d)", baseline, runtime.NumGoroutine())
+}
+
+// With the local exec allocator every task starts its own Chrome process, so
+// the number of browsers is bounded by the engine's concurrency.
+func TestEachTaskGetsItsOwnBrowser(t *testing.T) {
+	skipWithoutPS(t)
+
+	const tasks = 3
+
+	server, requests := hangServer(t)
+	marker := "pisces-test-" + uuid.NewString()
+	e := startEngine(t, tasks, WithExecAllocatorOptions(chromedp.Flag("pisces-test-marker", marker)))
+
+	for range tasks {
+		e.Add(NewTask("collect", server.URL, WithOutChannel(), WithTaskTimeout(5*time.Second)))
+	}
+
+	for range tasks {
+		waitForRequest(t, requests) // every task has navigated
+	}
+
+	assert.Equal(t, tasks, chromeProcesses(marker))
+}
+
+func waitForRequest(t *testing.T, requests <-chan struct{}) {
+	t.Helper()
+
+	select {
+	case <-requests:
+	case <-time.After(15 * time.Second):
+		t.Fatal("the browser never requested the page")
+	}
+}
+
+func skipWithoutPS(t *testing.T) {
+	t.Helper()
+
+	if _, err := exec.LookPath("ps"); err != nil || runtime.GOOS == "windows" {
+		t.Skip("ps not available")
+	}
 }
 
 func TestEngineContextCancelDoesNotBlockShutdown(t *testing.T) {
@@ -140,7 +180,7 @@ func TestEngineContextCancelDoesNotBlockShutdown(t *testing.T) {
 			// No timeout: only cancelling the engine context can end this task.
 			e.Add(NewTask("collect", server.URL))
 
-			<-requests // the first task is in flight
+			waitForRequest(t, requests) // the first task is in flight
 
 			// One more waits in the queue, which holds one task per worker.
 			e.Add(NewTask("collect", server.URL+"/queued"))
@@ -257,17 +297,18 @@ func resultWithin(t *testing.T, task Task, d time.Duration) Result {
 	}
 }
 
-// chromeProcesses counts processes whose command line contains marker.
+// chromeProcesses counts the browser (not helper) processes whose command line
+// contains marker.
 func chromeProcesses(marker string) int {
-	out, err := exec.CommandContext(context.Background(), "pgrep", "-f", marker).Output()
+	out, err := exec.CommandContext(context.Background(), "ps", "-ww", "-axo", "command").Output()
 	if err != nil {
-		return 0 // pgrep exits 1 when nothing matches
+		return 0
 	}
 
 	n := 0
 
-	for _, b := range out {
-		if b == '\n' {
+	for line := range strings.SplitSeq(string(out), "\n") {
+		if strings.Contains(line, marker) && !strings.Contains(line, "--type=") {
 			n++
 		}
 	}
