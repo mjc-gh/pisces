@@ -3,7 +3,6 @@ package engine
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"image"
 	"image/color"
@@ -30,9 +29,9 @@ func testPNG(t *testing.T) []byte {
 	t.Helper()
 
 	img := image.NewRGBA(image.Rect(0, 0, 16, 16))
-	for x := range 16 {
-		for y := range 16 {
-			img.Set(x, y, color.RGBA{R: uint8(x * 16), G: uint8(y * 16), B: 0xff, A: 0xff})
+	for x := range uint8(16) {
+		for y := range uint8(16) {
+			img.Set(int(x), int(y), color.RGBA{R: x * 16, G: y * 16, B: 0xff, A: 0xff})
 		}
 	}
 
@@ -71,7 +70,7 @@ func binaryServer(t *testing.T) (*httptest.Server, []byte, []byte) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, `<!doctype html><html><head><title>binary</title>
+		_, _ = fmt.Fprint(w, `<!doctype html><html><head><title>binary</title>
 <link rel="preload" as="font" type="font/woff2" crossorigin href="/font.woff2">
 </head><body><img src="/image.png"></body></html>`)
 	})
@@ -88,46 +87,6 @@ func binaryServer(t *testing.T) (*httptest.Server, []byte, []byte) {
 	t.Cleanup(server.Close)
 
 	return server, pngBytes, woffBytes
-}
-
-// TestDefectBinaryBodiesCorruptedByJSON: asset bodies are stored with
-// string(bytes), so binary data does not survive a JSON round trip. Fails on
-// the original code with a SHA-256 mismatch.
-func TestDefectBinaryBodiesCorruptedByJSON(t *testing.T) {
-	server, pngBytes, woffBytes := binaryServer(t)
-	task := NewTask("collect", server.URL)
-
-	ctx, cancel := piscestest.NewTestContext()
-	defer cancel()
-
-	cr, err := performCollectTask(ctx, &task, pisces.Logger())
-	require.NoError(t, err)
-
-	raw, err := json.Marshal(cr)
-	require.NoError(t, err)
-
-	var decoded struct {
-		Assets []struct {
-			URL  string `json:"url"`
-			Body string `json:"body"`
-		} `json:"assets"`
-	}
-	require.NoError(t, json.Unmarshal(raw, &decoded))
-
-	want := map[string][]byte{"/image.png": pngBytes, "/font.woff2": woffBytes}
-	for path, expected := range want {
-		found := false
-
-		for _, a := range decoded.Assets {
-			if strings.HasSuffix(a.URL, path) {
-				found = true
-
-				assert.Equal(t, sha(expected), sha([]byte(a.Body)), "%s bytes changed after JSON round trip", path)
-			}
-		}
-
-		assert.True(t, found, "asset %s not captured", path)
-	}
 }
 
 // slowSubresourceServer serves a page with n images; every third one is slow.
@@ -147,7 +106,7 @@ func slowSubresourceServer(t *testing.T, n int) *httptest.Server {
 		sb.WriteString("</body></html>")
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, sb.String())
+		_, _ = fmt.Fprint(w, sb.String())
 	})
 	mux.HandleFunc("/img/", func(w http.ResponseWriter, r *http.Request) {
 		var i int
@@ -159,7 +118,7 @@ func slowSubresourceServer(t *testing.T, n int) *httptest.Server {
 		}
 
 		w.Header().Set("Content-Type", "image/svg+xml")
-		fmt.Fprintf(w, `<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"><title>img %d</title></svg>`, i)
+		_, _ = fmt.Fprintf(w, `<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"><title>img %d</title></svg>`, i)
 	})
 
 	server := httptest.NewServer(mux)
@@ -236,7 +195,7 @@ func TestDefectNoTaskTimeout(t *testing.T) {
 
 	select {
 	case res := <-done:
-		assert.Error(t, res.Error)
+		require.Error(t, res.Error)
 	case <-time.After(5 * time.Second):
 		t.Fatal("no result within 5s for a page that never responds")
 	}

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +37,13 @@ type Visit struct {
 	InitialBody       string           `json:"initial_body,omitempty"`
 	Assets            []*Asset         `json:"assets"`
 
+	// InitialContentType and InitialSize describe the main document's response
+	// body, which RawInitialBody holds byte for byte. InitialBody is only set
+	// when that body is text. RawInitialBody is not part of the JSON output.
+	InitialContentType string `json:"initial_content_type,omitempty"`
+	InitialSize        int    `json:"initial_size,omitempty"`
+	RawInitialBody     []byte `json:"-"`
+
 	// assetsMap holds the assets of an in-progress visit, keyed by request ID.
 	// assetOrder records the request IDs in the order they were first seen so
 	// that Assets has a deterministic order.
@@ -60,6 +68,13 @@ type Asset struct {
 	ResponseStatus  int64            `json:"response_status,omitempty"`
 	InitiatorURL    string           `json:"initiator_url,omitempty"`
 	Body            string           `json:"body,omitempty"`
+
+	// ContentType and Size describe the response body, which RawBody holds byte
+	// for byte. Body is only set when that body is text (see isTextual). RawBody
+	// is not part of the JSON output.
+	ContentType string `json:"content_type,omitempty"`
+	Size        int    `json:"size,omitempty"`
+	RawBody     []byte `json:"-"`
 }
 
 type CertificateInfo struct {
@@ -91,6 +106,38 @@ func (c *Crawler) SetupListeners(ctx context.Context, logger *zerolog.Logger) {
 			c.onLoadingFinished(ctx, ev, logger)
 		}
 	})
+}
+
+// Visit a given URL and capture all the assets the document includes.
+func (c *Crawler) Visit(ctx context.Context, url string, logger *zerolog.Logger) error {
+	return c.captureVisit(ctx, func(ctx context.Context) error {
+		visit := c.currentVisit
+		if visit == nil {
+			return ErrInvalidCrawlerState
+		}
+
+		visit.RequestedURL = url
+
+		visitSteps := chromedp.Tasks{
+			network.Enable(),
+			chromedp.EmulateViewport(c.winWidth, c.winHeight),
+			emulation.SetUserAgentOverride(c.userAgent),
+			chromedp.Navigate(url),
+			chromedp.Location(&visit.Location),
+			chromedp.OuterHTML("html", &visit.Body),
+		}
+
+		return chromedp.Run(ctx, visitSteps...)
+	})
+}
+
+func (c *Crawler) LastVisit() *Visit {
+	l := len(c.Visits)
+	if l < 1 {
+		return nil
+	}
+
+	return &c.Visits[l-1]
 }
 
 func (c *Crawler) onRequestWillBeSent(ev *network.EventRequestWillBeSent, logger *zerolog.Logger) {
@@ -160,6 +207,11 @@ func (c *Crawler) onResponseReceived(ev *network.EventResponseReceived) {
 		asset.ResponseStatus = ev.Response.Status
 	} else if c.mainReqID == ev.RequestID {
 		visit.CertificateInfo = getCertInfo(secDetails)
+		visit.InitialContentType = strings.TrimSpace(headerValue(ev.Response.Headers, "Content-Type"))
+
+		if visit.InitialContentType == "" {
+			visit.InitialContentType = ev.Response.MimeType
+		}
 	}
 }
 
@@ -180,7 +232,16 @@ func (c *Crawler) onLoadingFinished(ctx context.Context, ev *network.EventLoadin
 				return
 			}
 
-			visit.InitialBody = string(body)
+			visit.RawInitialBody = body
+			visit.InitialSize = len(body)
+
+			if visit.InitialContentType == "" {
+				visit.InitialContentType = bodyContentType(nil, "", body)
+			}
+
+			if isTextual(visit.InitialContentType, body) {
+				visit.InitialBody = string(body)
+			}
 		})
 
 		return
@@ -194,7 +255,13 @@ func (c *Crawler) onLoadingFinished(ctx context.Context, ev *network.EventLoadin
 				return
 			}
 
-			asset.Body = string(body)
+			asset.RawBody = body
+			asset.Size = len(body)
+			asset.ContentType = bodyContentType(asset.ResponseHeaders, "", body)
+
+			if isTextual(asset.ContentType, body) {
+				asset.Body = string(body)
+			}
 		})
 	}
 }
@@ -249,38 +316,6 @@ func (c *Crawler) waitForFetches(ctx context.Context, visit *Visit) {
 			}
 		}
 	}
-}
-
-// Visit a given URL and capture all the assets the document includes.
-func (c *Crawler) Visit(ctx context.Context, url string, logger *zerolog.Logger) error {
-	return c.captureVisit(ctx, func(ctx context.Context) error {
-		visit := c.currentVisit
-		if visit == nil {
-			return ErrInvalidCrawlerState
-		}
-
-		visit.RequestedURL = url
-
-		visitSteps := chromedp.Tasks{
-			network.Enable(),
-			chromedp.EmulateViewport(c.winWidth, c.winHeight),
-			emulation.SetUserAgentOverride(c.userAgent),
-			chromedp.Navigate(url),
-			chromedp.Location(&visit.Location),
-			chromedp.OuterHTML("html", &visit.Body),
-		}
-
-		return chromedp.Run(ctx, visitSteps...)
-	})
-}
-
-func (c *Crawler) LastVisit() *Visit {
-	l := len(c.Visits)
-	if l < 1 {
-		return nil
-	}
-
-	return &c.Visits[l-1]
 }
 
 type visitCallback func(context.Context) error

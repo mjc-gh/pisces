@@ -45,7 +45,7 @@ func chromeExecPath(t *testing.T) string {
 
 // startEngine starts an engine and registers cleanup that cancels its context
 // and shuts it down.
-func startEngine(t *testing.T, concurrency int, opts ...Option) (*Engine, context.CancelFunc) {
+func startEngine(t *testing.T, concurrency int, opts ...Option) *Engine {
 	t.Helper()
 
 	nop := zerolog.Nop()
@@ -59,7 +59,7 @@ func startEngine(t *testing.T, concurrency int, opts ...Option) (*Engine, contex
 		e.Shutdown()
 	})
 
-	return e, cancel
+	return e
 }
 
 func TestWithExecAllocatorOptionsCollectsPage(t *testing.T) {
@@ -67,7 +67,7 @@ func TestWithExecAllocatorOptionsCollectsPage(t *testing.T) {
 	defer server.Close()
 
 	dataDir := t.TempDir()
-	e, _ := startEngine(t, 1, WithExecAllocatorOptions(
+	e := startEngine(t, 1, WithExecAllocatorOptions(
 		chromedp.NoSandbox,
 		chromedp.ExecPath(chromeExecPath(t)),
 		chromedp.UserDataDir(dataDir),
@@ -93,7 +93,7 @@ func TestWithExecAllocatorOptionsCollectsPage(t *testing.T) {
 }
 
 func TestWithExecAllocatorOptionsBadExecPath(t *testing.T) {
-	e, _ := startEngine(t, 1, WithExecAllocatorOptions(
+	e := startEngine(t, 1, WithExecAllocatorOptions(
 		chromedp.ExecPath(filepath.Join(t.TempDir(), "no-such-chrome")),
 	))
 

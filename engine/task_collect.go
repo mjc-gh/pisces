@@ -34,7 +34,7 @@ func performCollectTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 	result := CollectResult{Visit: visit}
 
 	// Set result metadata
-	result.InitialBodyLength = len(result.InitialBody)
+	result.InitialBodyLength = len(result.RawInitialBody)
 	result.BodyLength = len(result.Body)
 	result.TotalAssets = len(result.Assets)
 

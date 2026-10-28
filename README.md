@@ -85,6 +85,13 @@ action.
 
 ### Result Output
 
+Response bodies are captured byte for byte. In the JSON output an asset's (and
+the main document's) `body` is only included when its content type is textual
+(`text/*`, JSON, XML, JavaScript or SVG) and the bytes are valid UTF-8. Every
+captured body has a `content_type` and a `size` (bytes). Binary bodies, such as
+images and fonts, are omitted from the JSON; Go programs embedding the engine
+can read the exact bytes from `Asset.RawBody` and `Visit.RawInitialBody`.
+
 Below is an example of the `analyze` task's output for a single visit to `login.yahoo.com`. Some of the assets and response details have been truncated for brevity:
 
 ```json
@@ -215,6 +222,8 @@ Below is an example of the `analyze` task's output for a single visit to `login.
   },
   "body": "<html id=\"Stencil\" lang=\"en-US\" ",
   "initial_body": "<!DOCTYPE html>\n<html id=\"Stenci",
+  "initial_content_type": "text/html; charset=utf-8",
+  "initial_size": 61204,
   "assets": [
     {
       "url": "https://s.yimg.com/ss/analytics3",
@@ -259,7 +268,9 @@ Below is an example of the `analyze` task's output for a single visit to `login.
       },
       "response_status": 200,
       "initiator_url": "https://login.yahoo.com/",
-      "body": "(function(Re){typeof define==\"fu"
+      "body": "(function(Re){typeof define==\"fu",
+      "content_type": "application/javascript",
+      "size": 83512
     },
     {
       "url": "https://ups.analytics.yahoo.com/",
@@ -296,7 +307,9 @@ Below is an example of the `analyze` task's output for a single visit to `login.
         "x-content-type-options": "nosniff"
       },
       "response_status": 200,
-      "body": "{\"axid\": \"eS1MbXdzQ2IxRTJ1R2xuZW"
+      "body": "{\"axid\": \"eS1MbXdzQ2IxRTJ1R2xuZW",
+      "content_type": "application/json",
+      "size": 187
     },
     {
       "url": "https://udc.yahoo.com/v2/public/",
@@ -377,7 +390,9 @@ Below is an example of the `analyze` task's output for a single visit to `login.
       },
       "response_status": 200,
       "initiator_url": "https://login.yahoo.com/",
-      "body": "@font-face{font-family:\"Yahoo Sa"
+      "body": "@font-face{font-family:\"Yahoo Sa",
+      "content_type": "text/css",
+      "size": 612034
     },
     {
       "url": "https://s.yimg.com/rz/p/yahoo_fr",
@@ -421,7 +436,8 @@ Below is an example of the `analyze` task's output for a single visit to `login.
       },
       "response_status": 200,
       "initiator_url": "https://login.yahoo.com/",
-      "body": "�PNG\r\n\u001a\n\u0000\u0000\u0000\rIHDR\u0000\u0000\u0000�\u0000\u0000\u0000H\b\u0003\u0000\u0000\u0000�\u0012�"
+      "content_type": "image/png",
+      "size": 1346
     },
     {
       "url": "https://s.yimg.com/bw/fonts/yaho",
@@ -467,7 +483,8 @@ Below is an example of the `analyze` task's output for a single visit to `login.
       },
       "response_status": 200,
       "initiator_url": "https://s.yimg.com/wm/mbr/2df035",
-      "body": "wOF2\u0000\u0001\u0000\u0000\u0000\u0000�\u001c\u0000\u0011\u0000\u0000\u0000\u0001\u0015\u0014\u0000\u0000��\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000"
+      "content_type": "font/woff2",
+      "size": 34588
     },
     {
       "url": "https://gpt.mail.yahoo.net/sandb",
