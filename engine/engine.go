@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/chromedp/chromedp"
 	"github.com/mjc-gh/pisces/internal/browser"
 	"github.com/rs/zerolog"
 )
@@ -16,6 +17,7 @@ type config struct {
 	concurrency int
 	remoteURL   string
 	headfull    bool
+	execOpts    []chromedp.ExecAllocatorOption
 }
 
 type Engine struct {
@@ -39,6 +41,24 @@ func WithRemoteAllocator(host string, port int) Option {
 func WithHeadfullLocalAllocator() Option {
 	return func(e *Engine) {
 		e.config.headfull = true
+	}
+}
+
+// WithExecAllocatorOptions passes additional options to the local exec
+// allocator, for example chromedp.NoSandbox, chromedp.ExecPath or
+// chromedp.Flag("disable-dev-shm-usage", true). The options are appended after
+// pisces' own defaults, so they take precedence. Repeated calls accumulate.
+//
+// The options only apply to the local exec allocator. They are ignored, and a
+// warning is logged by Start, when WithRemoteAllocator is also used.
+//
+// Every task starts its own Chrome process (see Start), so chromedp.UserDataDir
+// must not be used with a concurrency above 1: concurrent browsers would share
+// one profile and fight over its lock. Omit it and set TMPDIR instead; chromedp
+// then creates (and removes) a private profile directory for each task.
+func WithExecAllocatorOptions(opts ...chromedp.ExecAllocatorOption) Option {
+	return func(e *Engine) {
+		e.config.execOpts = append(e.config.execOpts, opts...)
 	}
 }
 
@@ -74,11 +94,18 @@ func New(concurrency int, opts ...Option) *Engine {
 	return &e
 }
 
+// Start launches the workers. Each task creates its own browser context from
+// the allocator, which under the local exec allocator means one Chrome process
+// per task. The process exits when the task finishes.
 func (e *Engine) Start(ctx context.Context) {
 	if e.config.remoteURL != "" {
+		if len(e.config.execOpts) > 0 {
+			e.logger.Warn().Msg("exec allocator options are ignored when using a remote allocator")
+		}
+
 		ctx, e.browserCancel = browser.StartRemote(ctx, e.config.remoteURL)
 	} else {
-		ctx, e.browserCancel = browser.StartLocal(ctx, e.config.headfull)
+		ctx, e.browserCancel = browser.StartLocal(ctx, e.config.headfull, e.config.execOpts...)
 	}
 
 	for i := range e.config.concurrency {
