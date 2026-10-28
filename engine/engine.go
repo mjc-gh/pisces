@@ -128,7 +128,7 @@ func (e *Engine) Start(ctx context.Context) {
 				if task.resultCh != nil {
 					task.resultCh <- r
 				} else {
-					results <- r
+					sendResult(ctx, results, r)
 				}
 
 				logger.Debug().Msgf("task worker #%d sent result", idx)
@@ -137,6 +137,24 @@ func (e *Engine) Start(ctx context.Context) {
 	}
 }
 
+// sendResult delivers r to the results channel. If ctx is cancelled and no one
+// is receiving, the result is dropped so that the worker (and Shutdown) is
+// never left blocked on a reader that has gone away.
+func sendResult(ctx context.Context, results chan<- Result, r Result) {
+	select {
+	case results <- r:
+	case <-ctx.Done():
+		select {
+		case results <- r:
+		default:
+		}
+	}
+}
+
+// Shutdown stops accepting tasks, waits for the queued and running tasks to
+// finish and closes the results channel. To abandon unfinished work instead,
+// cancel the context passed to Start first: running tasks are cancelled, queued
+// tasks complete immediately with an error, and Shutdown returns promptly.
 func (e *Engine) Shutdown() {
 	e.logger.Debug().Msg("shutdown called")
 	defer e.logger.Debug().Msg("shutdown done")

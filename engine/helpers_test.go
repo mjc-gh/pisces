@@ -3,6 +3,8 @@ package engine
 import (
 	"bytes"
 	"sync"
+
+	"github.com/rs/zerolog"
 )
 
 // lockedBuffer is a bytes.Buffer that is safe for concurrent writers.
@@ -23,4 +25,10 @@ func (b *lockedBuffer) String() string {
 	defer b.mu.Unlock()
 
 	return b.buf.String()
+}
+
+func loggerForTest() *zerolog.Logger {
+	l := zerolog.Nop()
+
+	return &l
 }

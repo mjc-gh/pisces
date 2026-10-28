@@ -152,6 +152,12 @@ func performAnalyzeTask(ctx context.Context, task *Task, logger *zerolog.Logger)
 		}
 	}
 
+	// The analysis steps above only log their errors, so report a timeout or
+	// cancellation here. The partial result is returned with the error.
+	if err := ctx.Err(); err != nil {
+		return result, fmt.Errorf("analyze interrupted: %w", err)
+	}
+
 	return result, nil
 }
 
