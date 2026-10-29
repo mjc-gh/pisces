@@ -28,6 +28,8 @@ var (
 
 type taskCallbackFn = func(*cli.Command, *engine.Engine) error
 
+const defaultRulesDir = "rules"
+
 func main() {
 	baseArgs := []cli.Argument{
 		&cli.StringArgs{Name: "url", Min: 1, Max: -1},
@@ -44,7 +46,7 @@ func main() {
 		&cli.StringFlag{Name: "user-agent", Value: "chrome", Usage: "browser user-agent preset"},
 		&cli.StringFlag{
 			Name:  "rules-dir",
-			Value: "rules",
+			Value: defaultRulesDir,
 			Usage: "directory containing Sigma rules (default: rules/)",
 		},
 	}
@@ -57,11 +59,11 @@ func main() {
 		&cli.IntFlag{Name: "wait", Value: 300, Aliases: []string{"w"}, Usage: "wait time (seconds) after load before analysis"},
 	}, withOutputFlags...)
 
-	analyzeFlags := []cli.Flag{
+	analyzeFlags := append(make([]cli.Flag, 0, 3+len(withWaitFlags)), []cli.Flag{
 		&cli.IntFlag{Name: "max-form-submits", Value: 1, Usage: "maximum number of forms to submit when interacting"},
 		&cli.BoolFlag{Name: "no-clipboard", Usage: "disable clipboard interactions"},
 		&cli.BoolFlag{Name: "no-forms", Usage: "disable form interactions"},
-	}
+	}...)
 
 	analyzeFlags = append(analyzeFlags, withWaitFlags...)
 
@@ -175,10 +177,10 @@ func outputResultJson(cmd *cli.Command, e *engine.Engine) error {
 
 	rulesDir := cmd.String("rules-dir")
 	if rulesDir == "" {
-		rulesDir = "rules"
+		rulesDir = defaultRulesDir
 	}
 
-	if rulesDir != "rules" {
+	if rulesDir != defaultRulesDir {
 		logger.Info().Str("rules_dir", rulesDir).Msg("using custom Sigma rules directory")
 	}
 

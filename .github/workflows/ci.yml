@@ -15,7 +15,7 @@ jobs:
   test:
     strategy:
       matrix:
-        go-version: ['1.26', '1.27']
+        go-version: ['1.27']
         os: [ubuntu-latest]
 
     runs-on: ${{ matrix.os }}
@@ -25,14 +25,12 @@ jobs:
       run: |
         docker run -d \
           --name chromedp \
-          -p 9222:9222 \
-          chromedp/headless-shell:latest \
-          /headless-shell/headless-shell \
-          --no-sandbox \
-          --disable-gpu \
-          --disable-dev-shm-usage \
-          --remote-debugging-address=0.0.0.0 \
-          --remote-debugging-port=9222
+          --network host \
+          chromedp/headless-shell:latest
+        if ! curl --retry 30 --retry-delay 1 --retry-all-errors --max-time 2 -fsS http://localhost:9222/json/version > /dev/null; then
+          docker logs chromedp
+          exit 1
+        fi
 
     - uses: actions/checkout@v4
 
@@ -55,7 +53,7 @@ jobs:
     - name: Run linting
       uses: golangci/golangci-lint-action@v9
       with:
-        version: v2.13
+        version: v2.15.0
 
     - name: Run tests
       run: go test ./...

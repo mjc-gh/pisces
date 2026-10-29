@@ -127,6 +127,7 @@ func (t Task) Result() Result {
 	return <-t.resultCh
 }
 
+//nolint:recvcheck // MarshalJSON needs a value receiver; JSON methods retain their pointer API.
 type Result struct {
 	Action  string        `json:"action"`
 	Elapsed time.Duration `json:"elapsed"`

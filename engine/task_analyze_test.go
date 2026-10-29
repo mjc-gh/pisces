@@ -34,7 +34,7 @@ func TestPerformAnalyzeTask(t *testing.T) {
 }
 
 func TestPerformAnalyzeTaskWithCookeis(t *testing.T) {
-	testCookie := http.Cookie{
+	testCookie := http.Cookie{ //nolint:gosec // Test exercises a non-secure cookie over HTTP.
 		Name:     "http_cookie",
 		Value:    "delightful",
 		Expires:  time.Now().Add(24 * time.Hour),

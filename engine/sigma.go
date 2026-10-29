@@ -54,7 +54,7 @@ func InitSigmaEngine(rulesDir string, logger *zerolog.Logger) error {
 			return nil
 		}
 
-		contents, readErr := os.ReadFile(filepath.Clean(path))
+		contents, readErr := os.ReadFile(filepath.Clean(path)) //nolint:gosec // Rules may be symlinks in the configured directory.
 		if readErr != nil {
 			logger.Warn().
 				Err(readErr).

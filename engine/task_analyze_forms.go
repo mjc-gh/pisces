@@ -31,6 +31,8 @@ const (
 
 const INPUT_HIDDEN = "hidden"
 
+const classAttribute = "class"
+
 type formData interface {
 	Email() string
 	Phone() string
@@ -66,7 +68,7 @@ func scanForForms(ctx context.Context, wait int64, forms *[]Form, logger *zerolo
 			labelsByID[label.AttributeValue("for")] = label
 		}
 
-		formNodeAttrs := attributesFromNodes(ctx, formNodes, []string{"action", "method", "class", "id"})
+		formNodeAttrs := attributesFromNodes(ctx, formNodes, []string{"action", "method", classAttribute, "id"})
 		for idx, formNode := range formNodes {
 			var inputNodes []*cdp.Node
 
@@ -87,7 +89,7 @@ func scanForForms(ctx context.Context, wait int64, forms *[]Form, logger *zerolo
 				xpath:  formNode.FullXPath(),
 			}
 
-			inputNodeAttrs := attributesFromNodes(ctx, inputNodes, []string{"class", "id", "placeholder", "name", "type", "value"})
+			inputNodeAttrs := attributesFromNodes(ctx, inputNodes, []string{classAttribute, "id", "placeholder", "name", "type", "value"})
 			for jdx, inputAttrs := range inputNodeAttrs {
 				id := inputAttrs[1]
 

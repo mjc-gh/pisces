@@ -50,7 +50,7 @@ func testWOFF2() []byte {
 	//nolint:gosec // deterministic test data
 	rng := rand.New(rand.NewSource(42))
 	for i := 4; i < len(data); i++ {
-		data[i] = byte(0x80 | rng.Intn(0x80))
+		data[i] = 0x80 | byte(rng.Intn(0x80)) //nolint:gosec // Intn(0x80) is always in byte range.
 	}
 
 	return data

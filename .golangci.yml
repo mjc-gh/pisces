@@ -1,7 +1,10 @@
 version: "2"
 linters:
   default: all
+  enable:
+    - gomodguard_v2
   disable:
+    - gomodguard
     # TODO: Get these linters enabled
     - contextcheck
     - gochecknoglobals
@@ -15,6 +18,7 @@ linters:
     - depguard
     - embeddedstructfieldcheck
     - exhaustruct
+    - exhaustruct_v5
     - funlen
     - lll
     - gocognit
@@ -33,6 +37,8 @@ linters:
           - nestif
 
   settings:
+    goconst:
+      ignore-tests: true
     tagliatelle:
       case:
         rules:

@@ -184,7 +184,7 @@ func runLinkAnalysis(ctx context.Context, wait int64, result *AnalyzeResult) err
 
 		result.Links = make([]Link, 0, len(anchorNodes))
 
-		anchorNodeAttrs := attributesFromNodes(ctx, anchorNodes, []string{"href", "class"})
+		anchorNodeAttrs := attributesFromNodes(ctx, anchorNodes, []string{"href", classAttribute})
 		for idx, anchorNode := range anchorNodes {
 			anchorAttrs := anchorNodeAttrs[idx]
 			if anchorAttrs[0] == "" {
@@ -407,8 +407,7 @@ func runFormInteractions(ctx context.Context, maxSubmits int, crawler *Crawler, 
 	// Create a slice of form pointers and sort them by priority. We'll only
 	// perform maxSubmits and will prioritize forms using a custom ranking based
 	// upon the fields defined.
-	// knownForms := make([]*Form, len(result.Forms))
-	knownForms := []*Form{}
+	knownForms := make([]*Form, 0, len(result.Forms))
 	for _, f := range result.Forms {
 		knownForms = append(knownForms, &f)
 	}
