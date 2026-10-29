@@ -8,6 +8,9 @@ on:
     branches:
       - main
 
+env:
+  PISCES_CHROMEDP_REMOTE_URL: "http://localhost:9222"
+
 jobs:
   test:
     strategy:
@@ -41,12 +44,6 @@ jobs:
     - name: Disable AppArmor unprivileged userns restriction
       run: echo 0 | sudo tee /proc/sys/kernel/apparmor_restrict_unprivileged_userns
       if: runner.os == 'Linux'
-
-    - name: Set up tools
-      env:
-        PISCES_CHROMEDP_REMOTE_URL: "http://localhost:9222"
-      run: |
-        go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
     - name: Run go fmt check
       run: |
