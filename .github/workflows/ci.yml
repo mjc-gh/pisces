@@ -58,7 +58,7 @@ jobs:
     - name: Run linting
       uses: golangci/golangci-lint-action@v9
       with:
-        version: v2.6
+        version: v2.13
 
     - name: Run tests
       run: go test ./...
