@@ -1,0 +1,52 @@
+{
+	"action": "collect",
+	"elapsed": 1500000000,
+	"url": "http://example.test/",
+	"result": {
+		"body_length": 34,
+		"initial_body_length": 26,
+		"total_assets": 2,
+		"requested_url": "http://example.test/",
+		"location": "http://example.test/login",
+		"redirect_locations": [
+			{
+				"status_code": 302,
+				"location": "/login"
+			}
+		],
+		"certificate_info": {
+			"protocol": "TLS 1.3",
+			"issuers": "Test CA",
+			"subject_name": "example.test",
+			"valid_from": "2026-01-01T00:00:00Z",
+			"valid_to": "2026-04-01T00:00:00Z",
+			"sans": [
+				"example.test"
+			]
+		},
+		"body": "\u003chtml\u003e\u003cbody\u003eafter js\u003c/body\u003e\u003c/html\u003e",
+		"initial_body": "\u003chtml\u003e\u003cbody\u003e\u003c/body\u003e\u003c/html\u003e",
+		"assets": [
+			{
+				"url": "http://example.test/app.js",
+				"resource_type": "Script",
+				"request_headers": {
+					"Referer": "http://example.test/"
+				},
+				"response_headers": {
+					"content-type": "application/javascript"
+				},
+				"response_status": 200,
+				"initiator_url": "http://example.test/",
+				"body": "console.log('hi')"
+			},
+			{
+				"url": "http://example.test/ping",
+				"resource_type": "XHR",
+				"request_headers": {},
+				"response_headers": {},
+				"response_status": 204
+			}
+		]
+	}
+}

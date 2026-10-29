@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"strings"
@@ -23,6 +24,7 @@ type Task struct {
 	winHeight int
 	winWidth  int
 	received  time.Time
+	timeout   time.Duration
 }
 
 type TaskOption func(*Task)
@@ -42,6 +44,19 @@ func WithDeviceProperties(deviceType, deviceSize string) TaskOption {
 func WithUserAgent(deviceType, userAgentAlias string) TaskOption {
 	return func(t *Task) {
 		t.userAgent = browser.UserAgent(deviceType, userAgentAlias)
+	}
+}
+
+// WithTaskTimeout limits how long a task may run once a worker starts it; time
+// spent waiting in the engine's queue does not count. When the timeout expires
+// the task is cancelled, its browser is released and Result.Error wraps
+// context.DeadlineExceeded. A zero (or negative) duration means no timeout.
+//
+// An "analyze" task that times out part way through may still carry the
+// partial payload it collected in Result.Result alongside the error.
+func WithTaskTimeout(d time.Duration) TaskOption {
+	return func(t *Task) {
+		t.timeout = max(d, 0)
 	}
 }
 
@@ -112,12 +127,32 @@ func (t Task) Result() Result {
 	return <-t.resultCh
 }
 
+//nolint:recvcheck // MarshalJSON needs a value receiver; JSON methods retain their pointer API.
 type Result struct {
 	Action  string        `json:"action"`
 	Elapsed time.Duration `json:"elapsed"`
 	Error   error         `json:"error,omitempty"`
 	URL     string        `json:"url"`
 	Result  Payload       `json:"result"`
+}
+
+// MarshalJSON encodes the Error as its message. Without it the error interface
+// would be encoded as an empty object. A nil Error is omitted, as before.
+func (r Result) MarshalJSON() ([]byte, error) {
+	type wire struct {
+		Action  string        `json:"action"`
+		Elapsed time.Duration `json:"elapsed"`
+		Error   string        `json:"error,omitempty"`
+		URL     string        `json:"url"`
+		Result  Payload       `json:"result"`
+	}
+
+	w := wire{Action: r.Action, Elapsed: r.Elapsed, URL: r.URL, Result: r.Result}
+	if r.Error != nil {
+		w.Error = r.Error.Error()
+	}
+
+	return json.Marshal(w)
 }
 
 func newErrorResult(task *Task, err error) Result {
@@ -144,6 +179,30 @@ func performTask(ctx context.Context, task *Task, logger *zerolog.Logger) Result
 	logger.Debug().Msgf("perform task: %+v", task)
 	defer logger.Debug().Msgf("performed task: %+v", task)
 
+	if task.timeout > 0 {
+		var cancel context.CancelFunc
+
+		ctx, cancel = context.WithTimeout(ctx, task.timeout)
+		defer cancel()
+	}
+
+	// Don't start a browser for work that has already been cancelled.
+	if err := ctx.Err(); err != nil {
+		return newErrorResult(task, err)
+	}
+
+	result := runAction(ctx, task, logger)
+
+	// Surface a timeout or cancellation as the error, whichever way the action
+	// reported it (chromedp errors do not always wrap the context error).
+	if err := ctx.Err(); err != nil && result.Error != nil && !errors.Is(result.Error, err) {
+		result.Error = fmt.Errorf("%w: %w", err, result.Error)
+	}
+
+	return result
+}
+
+func runAction(ctx context.Context, task *Task, logger *zerolog.Logger) Result {
 	result := Result{
 		Action: task.action,
 		URL:    task.url,
@@ -155,7 +214,12 @@ func performTask(ctx context.Context, task *Task, logger *zerolog.Logger) Result
 	case "analyze":
 		payload, err := performAnalyzeTask(ctx, task, &tlog)
 		if err != nil {
-			return newErrorResult(task, err)
+			r := newErrorResult(task, err)
+			if payload.Visit != nil {
+				r.Result = &payload
+			}
+
+			return r
 		}
 
 		result.Result = &payload

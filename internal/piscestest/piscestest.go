@@ -54,7 +54,7 @@ func NewTestWebServer(dir string, opts ...TestWebServerOption) *httptest.Server 
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("piscestest request: %s %s\n", r.Method, r.URL)
+	log.Printf("piscestest request: %q %q\n", r.Method, r.URL) //nolint:gosec // Quoting escapes newlines in request data.
 
 	path := r.URL.Path
 
@@ -90,7 +90,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.SetCookie(w, &cookie)
 	}
 
-	http.ServeFileFS(w, r, testFS, fullPath)
+	http.ServeFileFS(w, r, testFS, fullPath) //nolint:gosec // testFS contains only embedded test fixtures.
 }
 
 func NewTestContext() (context.Context, context.CancelFunc) {

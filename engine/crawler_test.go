@@ -68,3 +68,71 @@ func TestCrawlerLastVisitWithoutAnyVisits(t *testing.T) {
 
 	assert.Nil(t, crawler.LastVisit())
 }
+
+func TestCrawlerCapturesAllSlowSubresources(t *testing.T) {
+	const total = 30
+
+	server := slowSubresourceServer(t, total)
+
+	visit := collectVisit(t, server.URL)
+
+	count := 0
+
+	for _, a := range visit.Assets {
+		if !strings.Contains(a.URL, "/img/") {
+			continue // e.g. /favicon.ico
+		}
+
+		count++
+
+		assert.Equal(t, int64(200), a.ResponseStatus, a.URL)
+		assert.NotEmpty(t, a.Body, "asset %s has no body", a.URL)
+	}
+
+	assert.Equal(t, total, count)
+	assert.NotEmpty(t, visit.InitialBody)
+}
+
+func TestCrawlerAssetOrderIsDeterministic(t *testing.T) {
+	server := slowSubresourceServer(t, 30)
+
+	urls := func() []string {
+		visit := collectVisit(t, server.URL)
+		out := make([]string, 0, len(visit.Assets))
+
+		for _, a := range visit.Assets {
+			if strings.Contains(a.URL, "/img/") {
+				out = append(out, a.URL)
+			}
+		}
+
+		return out
+	}
+
+	first, second := urls(), urls()
+
+	require.Len(t, first, 30)
+	assert.Equal(t, first, second)
+	assert.True(t, slices.IsSorted(first), "assets are in document order")
+}
+
+// collectVisit visits url with a fresh browser and returns the captured visit.
+func collectVisit(t *testing.T, url string) *Visit {
+	t.Helper()
+
+	pctx, cancel := piscestest.NewTestContext()
+	defer cancel()
+
+	ctx, cancelCtx := chromedp.NewContext(pctx)
+	defer cancelCtx()
+
+	crawler := NewCrawler("pisces", 1280, 720)
+	crawler.SetupListeners(ctx, pisces.Logger())
+
+	require.NoError(t, crawler.Visit(ctx, url, pisces.Logger()))
+
+	visit := crawler.LastVisit()
+	require.NotNil(t, visit)
+
+	return visit
+}
